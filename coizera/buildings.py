@@ -3,9 +3,10 @@ from abc import ABC, abstractmethod
 import random
 import math
 import sys
-import long_init_stuff
-import player
-import effects
+
+from coizera import long_init_stuff
+from coizera import player
+from coizera import effects
 
 # Fonts init
 pygame.font.init()

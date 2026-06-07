@@ -2,11 +2,16 @@ import pygame
 from pygame import Vector2, sprite
 import random
 import math
+from importlib import resources
+
+from coizera import sfx
 
 # Pygame setup
 pygame.init()
 pygame.font.init()  # Initialize the font system
 pygame.mixer.init()
+sfx.load_sfx()
+
 font = pygame.font.SysFont("Consolas", 11)  # Small font for subtle labels below icons
 
 # Get display dimensions
@@ -39,14 +44,15 @@ clicked = False
 game_settings = {"volume": 0.05}
 pygame.mixer.music.set_volume(game_settings["volume"])
 # Lazy imports to prevent circular dependency structures
-import items
-import buildings
-import effects
-import long_init_stuff
-import player
-import enemies  # Dynamically import the custom modular enemies system!
+from coizera import items
+from coizera import buildings
+from coizera import effects
+from coizera import long_init_stuff
+from coizera import player
+from coizera import enemies
 
-pygame.mixer.music.load("assets/giggle-touch.mp3")
+
+pygame.mixer.music.load(resources.files("coizera.assets").joinpath("giggle-touch.mp3"))
 pygame.mixer.music.play(-1)
 
 
@@ -746,10 +752,12 @@ while running:
                 if item.tool in player.sprite.pitems:
                     if add_to_inventory(item.name):
                         item.collect()  # Smooth vacuum trigger!
+                        sfx.PICKUP.play()
                         total_items = len(items_group)
             else:
                 if add_to_inventory(item.name):
                     item.collect()  # Smooth vacuum trigger!
+                    sfx.PICKUP.play()
                     total_items = len(items_group)
 
     # Check player damaged to trigger screen shake
