@@ -223,6 +223,12 @@ class Weapon(sprite.Sprite):
         """Draws the fading sword trace on the main screen with substepping smoothing."""
         if not self.trail or len(self.trail) < 2:
             return
+
+        # Dynamically resize the trail surface if it doesn't match the current display window size
+        target_size = surface.get_size()
+        if self.trail_surf.get_size() != target_size:
+            self.trail_surf = pygame.Surface(target_size, pygame.SRCALPHA)
+
         self.trail_surf.fill((0, 0, 0, 0))  # Clear transparency buffer
 
         # 1. Draw the main fading body of the slash
@@ -645,7 +651,7 @@ while running:
         if summon_timer == 0:
             for _ in range(random.randint(7, 15)):
                 rand_pos = get_pos_offscreen()
-                spawn_enemy(rand_pos, zone, enemies.ShadowStalker)
+                enemy_group.add(spawn_enemy(rand_pos, zone, enemies.ShadowStalker))
 
         # Fix: Correctly inspect instances inside buildings_group to advance tutorial states!
         has_furnace = any(isinstance(b, buildings.Furnace) for b in buildings_group)
@@ -698,7 +704,7 @@ while running:
             item_timer += 1
             if item_timer >= max_item_timer:
                 # Base/forest/mine zone spawns check for weapons as well!
-                if has_weapon and random.randint(1, 24) == 1:
+                if has_weapon and random.randint(1, 2) == 1:
                     enemy_group.add(
                         spawn_enemy(
                             Vector2(
@@ -740,7 +746,7 @@ while running:
         projectiles_group.update(enemy_group)
 
         # Decay screen shake smoothly over frames
-        screen_shake *= 0.98
+        screen_shake *= 0.9
         if screen_shake < 0.1:
             screen_shake = 0.0
 
