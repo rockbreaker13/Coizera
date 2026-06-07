@@ -25,6 +25,7 @@ class Player(sprite.Sprite):
         self.attacked = 0
         self.target_hp = 20
         self.dead = False  # Track the dead state inside the Player object
+
         pygame.draw.rect(self.image, (255, 255, 0), (0, 0, 40, 40), border_radius=10)
         pygame.draw.rect(self.image, (0, 0, 0), (0, 0, 40, 40), 5, 10)
 
@@ -38,6 +39,7 @@ class Player(sprite.Sprite):
             self.vel.y += self.speed
         if keys[pygame.K_d]:
             self.vel.x += self.speed
+
         if (
             keys[pygame.K_1]
             and len(main_mod.weapons) > 0
@@ -54,6 +56,39 @@ class Player(sprite.Sprite):
         self.vel *= 0.8
         self.pos += self.vel
         self.rect.center = self.pos
+
+        # --- ZONE BOUNDARY BLOCKING LOGIC ---
+        if main_mod.zone == "base":
+            # Only allowed to exit past the right edge (rect.left can cross past W)
+            if self.rect.left < 0:
+                self.rect.left = 0
+            if self.rect.top < 0:
+                self.rect.top = 0
+            if self.rect.bottom > main_mod.H:
+                self.rect.bottom = main_mod.H
+            self.pos.update(self.rect.center)
+
+        elif main_mod.zone == "forest":
+            # Only allowed to exit past the left edge (rect.right can cross past 0)
+            if self.rect.right > main_mod.W:
+                self.rect.right = main_mod.W
+            if self.rect.top < 0:
+                self.rect.top = 0
+            if self.rect.bottom > main_mod.H:
+                self.rect.bottom = main_mod.H
+            self.pos.update(self.rect.center)
+
+        elif main_mod.zone in ["mine1", "mine2", "The Outer Realm"]:
+            # Completely blocked on all 4 sides of the screen
+            if self.rect.left < 0:
+                self.rect.left = 0
+            if self.rect.right > main_mod.W:
+                self.rect.right = main_mod.W
+            if self.rect.top < 0:
+                self.rect.top = 0
+            if self.rect.bottom > main_mod.H:
+                self.rect.bottom = main_mod.H
+            self.pos.update(self.rect.center)
 
         # Handle passive health regeneration
         if self.attacked > 0:
