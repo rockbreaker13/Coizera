@@ -11,7 +11,7 @@ font = pygame.font.SysFont("Consolas", 11)  # Small font for subtle labels below
 
 # Get display dimensions
 info = pygame.display.Info()
-W, H = info.current_w, info.current_h
+W, H = info.current_w - 80, info.current_h - 80
 screen = pygame.display.set_mode((W, H), vsync=True, flags=pygame.RESIZABLE)
 clock = pygame.time.Clock()
 show_inv = False
@@ -33,6 +33,8 @@ weapons = [
 volume_rect = pygame.Rect(W // 2, H // 2 - 100, 40, 40)
 exit_button_size = 200
 tebs = 200
+cmss = 80.0
+clicked = False
 
 game_settings = {"volume": 0.05}
 pygame.mixer.music.set_volume(game_settings["volume"])
@@ -441,6 +443,7 @@ def settings():
     pygame.draw.rect(
         screen, (0, 0, 100), (W // 2, H // 2 - 100, 200, 40), border_radius=20
     )
+    pygame.draw.rect(screen, (0, 0, 0), (W // 2, H // 2 - 100, 200, 40), 5, 20)
     setting_id_font = pygame.font.SysFont("Consolas", 30, True)
     setting_id_surf = setting_id_font.render("Volume", True, (255, 255, 255))
     screen.blit(
@@ -455,6 +458,7 @@ def settings():
         volume_rect.centerx = W // 2 + 200
     elif volume_rect.centerx < W // 2:
         volume_rect.centerx = W // 2
+    pygame.draw.circle(screen, (255, 0, 0), volume_rect.center, 25)
     pygame.draw.circle(screen, (255, 255, 0), volume_rect.center, 20)
     game_settings["volume"] = (volume_rect.centerx - (W // 2)) / 200
     pygame.mixer.music.set_volume(game_settings["volume"])
@@ -510,15 +514,74 @@ def get_pos_offscreen():
 
 
 # --- NEW DYNAMIC SPAWNING HELPER ---
-def spawn_enemy(pos, zone):
+def spawn_enemy(pos, zone, enemy=None):
     """Returns a specific concrete enemy subclass based on the current active zone."""
-    if zone == "The Outer Realm":
-        return enemies.ShadowStalker(pos, zone)
-    elif zone == "mine2":
-        return enemies.MagmaSlime(pos, zone)
+    if enemy is None:
+        if zone == "The Outer Realm":
+            return enemies.ShadowStalker(pos, zone)
+        elif zone == "mine2":
+            return enemies.MagmaSlime(pos, zone)
+        else:
+            # Defaults to overworld Bouncing Slimes for base, forest, and mine1
+            return enemies.BouncingSlime(pos, zone)
     else:
-        # Defaults to overworld Bouncing Slimes for base, forest, and mine1
-        return enemies.BouncingSlime(pos, zone)
+        return enemy(pos, zone)
+
+
+def draw_mouse(mpos):
+    # 2. Tell Python to use the global variable, not a temporary local one
+    global cmss, zone, clicked
+
+    if pygame.mouse.get_pressed()[0]:
+        MCOLOR1 = (0, 200, 200)  # Cyan outline
+        MCOLOR2 = (0, 255, 255)  # Cyan fill
+        tmss = 240
+        if not clicked:
+            effects_group.add(effects.Pop(mpos.x, mpos.y, 10, zone, (255, 127, 0)))
+        clicked = True
+    else:
+        MCOLOR1 = (200, 0, 0)  # Red outline
+        MCOLOR2 = (255, 0, 0)  # Red fill
+        tmss = 300
+        clicked = False
+
+    # 3. The lerp will now smoothly build upon the previous frame's value
+    cmss = (tmss - cmss) / 2
+
+    # Create a transparent canvas large enough to hold the cursor and its tail
+    msurf = pygame.Surface((100, 100), pygame.SRCALPHA)
+    pygame.mouse.set_visible(False)
+
+    # 1. THE OUTLINE SHAPE (Relative to 0, 0)
+    outline_points = [
+        (0, 0),  # Tip
+        (0, 54),  # Bottom-left corner
+        (15, 39),  # Inner crook
+        (28, 64),  # Bottom-right of tail
+        (36, 60),  # Bottom-left of tail
+        (23, 35),  # Outer crook
+        (38, 35),  # Right wing tip
+    ]
+    pygame.draw.polygon(msurf, MCOLOR1, outline_points)
+
+    # 2. THE FILL SHAPE (Relative to 0, 0, tucked inside)
+    fill_points = [
+        (2, 4),  # Tip tucked slightly in
+        (2, 48),  # Bottom-left corner
+        (15, 35),  # Inner crook
+        (26, 58),  # Bottom-right of tail
+        (31, 56),  # Bottom-left of tail
+        (20, 33),  # Outer crook
+        (33, 33),  # Right wing tip
+    ]
+    pygame.draw.polygon(msurf, MCOLOR2, fill_points)
+
+    # 4. Convert cmss to an integer before scaling (pygame requires integers for dimensions)
+    int_size = int(cmss)
+    msurf = pygame.transform.scale(msurf, (int_size, int_size))
+
+    # Draw the finished cursor surface onto the main screen at the mouse coordinates
+    screen.blit(msurf, mpos)
 
 
 # Spawning configuration
@@ -576,7 +639,7 @@ while running:
         if summon_timer == 0:
             for _ in range(random.randint(7, 15)):
                 rand_pos = get_pos_offscreen()
-                spawn_enemy(rand_pos, zone)
+                spawn_enemy(rand_pos, zone, enemies.ShadowStalker)
 
         # Fix: Correctly inspect instances inside buildings_group to advance tutorial states!
         has_furnace = any(isinstance(b, buildings.Furnace) for b in buildings_group)
@@ -805,8 +868,8 @@ while running:
         cols = 5
         inv_width = cols * (slot_size + padding) - padding
         inv_height = rows * (slot_size + padding) - padding
-        start_x = (W - inv_width) // 2
-        start_y = (H - inv_height) // 2
+        start_x = 25
+        start_y = 25
         for r in range(rows):
             for c in range(cols):
                 index = r * 5 + c
@@ -859,7 +922,7 @@ while running:
                     )
                     screen.blit(text_surface, text_rect)
 
-    pos1, pos2 = (70, H - 80), (170, H - 80)
+    pos1, pos2 = (70, H - 120), (170, H - 80)
     weapon_positions = [pos1, pos2]
     for i, pos in enumerate(weapon_positions):
         # 1. Draw the slot circles
@@ -928,6 +991,10 @@ while running:
             zone = "base"
     if show_settings:
         settings()
+    if pygame.Rect(20, 20, W - 20, H - 20).collidepoint(pygame.mouse.get_pos()):
+        draw_mouse(Vector2(mouse_pos))
+    else:
+        pygame.mouse.set_visible(True)
     pygame.display.flip()
     visible_sprites.clear()
     clock.tick(60)
