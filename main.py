@@ -45,7 +45,7 @@ import long_init_stuff
 import player
 import enemies  # Dynamically import the custom modular enemies system!
 
-pygame.mixer.music.load("assets/giggle touch.mp3")
+pygame.mixer.music.load("assets/giggle-touch.mp3")
 pygame.mixer.music.play(-1)
 
 
