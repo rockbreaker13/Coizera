@@ -2,7 +2,6 @@ import pygame
 from pygame import Vector2, sprite
 import random
 import math
-import sys
 
 # Pygame setup
 pygame.init()
@@ -13,7 +12,7 @@ font = pygame.font.SysFont("Consolas", 11)  # Small font for subtle labels below
 # Get display dimensions
 info = pygame.display.Info()
 W, H = info.current_w, info.current_h
-screen = pygame.display.set_mode((W, H))
+screen = pygame.display.set_mode((W, H), vsync=True, flags=pygame.RESIZABLE)
 clock = pygame.time.Clock()
 show_inv = False
 show_settings = False
@@ -553,6 +552,10 @@ while running:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
+        if event.type == pygame.VIDEORESIZE:
+            W, H = event.w, event.h
+            # screen = pygame.display.set_mode((W, H), vsync=True, flags=pygame.RESIZABLE)
+            volume_rect.center = (W // 2, H // 2 - 100)
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_e and not player.sprite.dead:
                 show_inv = not show_inv  # Toggles exactly once per press
@@ -798,10 +801,14 @@ while running:
     if show_inv:
         slot_size = 50
         padding = 5
-        start_x = 10
-        start_y = 10
-        for r in range(2):
-            for c in range(5):
+        rows = 2
+        cols = 5
+        inv_width = cols * (slot_size + padding) - padding
+        inv_height = rows * (slot_size + padding) - padding
+        start_x = (W - inv_width) // 2
+        start_y = (H - inv_height) // 2
+        for r in range(rows):
+            for c in range(cols):
                 index = r * 5 + c
                 x = start_x + c * (slot_size + padding)
                 y = start_y + r * (slot_size + padding)
@@ -852,7 +859,7 @@ while running:
                     )
                     screen.blit(text_surface, text_rect)
 
-    pos1, pos2 = (70, H - 100), (170, H - 60)
+    pos1, pos2 = (70, H - 80), (170, H - 80)
     weapon_positions = [pos1, pos2]
     for i, pos in enumerate(weapon_positions):
         # 1. Draw the slot circles
