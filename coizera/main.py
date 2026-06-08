@@ -5,6 +5,8 @@ import math
 from importlib import resources
 
 from coizera import sfx
+from coizera import events
+from coizera import pubsub
 
 # Pygame setup
 pygame.init()
@@ -621,6 +623,19 @@ projectiles_group = sprite.Group()
 # This lets the enemy do effects.add() while keeping the active list inside items.py!
 effects.add = effects_group.add
 buildings_group.add(buildings.CraftingTable(Vector2(W // 2 - 80, H // 2 - 80)))
+
+# Event Handlers
+@pubsub.event_bus.on(events.PLAYER_PICKS_UP_ITEM)
+def on_item_pickup(event: events.PlayerPicksUpItem):
+    global total_items
+    if add_to_inventory(event.item_name):
+        sfx.PICKUP.play()
+        total_items = len(items_group)
+
+@pubsub.event_bus.on(events.SCREEN_SHAKE)
+def on_screen_shake(event: events.ScreenShake):
+    global screen_shake
+    screen_shake = max(screen_shake, event.intensity)
 
 running = True
 while running:

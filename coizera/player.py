@@ -3,6 +3,9 @@ from pygame import Vector2, sprite
 import sys
 import random
 
+from coizera import events
+from coizera import pubsub
+
 main_mod = sys.modules["__main__"]
 
 
@@ -28,6 +31,13 @@ class Player(sprite.Sprite):
 
         pygame.draw.rect(self.image, (255, 255, 0), (0, 0, 40, 40), border_radius=10)
         pygame.draw.rect(self.image, (0, 0, 0), (0, 0, 40, 40), 5, 10)
+        pubsub.event_bus.subscribe(events.PLAYER_TAKES_DAMAGE, self.on_damage_taken)
+
+    def on_damage_taken(self, event: events.PlayerTakesDamage):
+        if self.attacked <= 0:
+            self.target_hp = self.hp - event.damage
+            self.attacked = 30
+            pubsub.event_bus.publish(events.SCREEN_SHAKE, events.ScreenShake(intensity=3))
 
     def update(self):
         keys = pygame.key.get_pressed()
