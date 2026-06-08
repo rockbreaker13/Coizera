@@ -16,9 +16,9 @@ title_font = pygame.font.SysFont("Consolas", 48)
 class Building(pygame.sprite.Sprite, ABC):
     def __init__(self, pos=None):
         super().__init__()
-        self.image = pygame.Surface((80, 80), pygame.SRCALPHA)
-        pygame.draw.rect(self.image, (100, 100, 100), (0, 0, 80, 80), border_radius=10)
-        pygame.draw.rect(self.image, (0, 0, 0), (0, 0, 80, 80), 5, 10)
+        self._surface = pygame.Surface((80, 80), pygame.SRCALPHA)
+        self.draw_building()
+        self.image = self._surface.copy()
         self.rect = self.image.get_rect()
 
         if pos is not None:
@@ -27,6 +27,10 @@ class Building(pygame.sprite.Sprite, ABC):
             self.pos = pygame.Vector2(
                 random.randint(100, game_state.W - 100), random.randint(100, game_state.H - 100)
             )
+
+    def draw_building(self):
+        pygame.draw.rect(self._surface, (100, 100, 100), (0, 0, 80, 80), border_radius=10)
+        pygame.draw.rect(self._surface, (0, 0, 0), (0, 0, 80, 80), 5, 10)
 
     @abstractmethod
     def update(self):
@@ -39,6 +43,9 @@ class Building(pygame.sprite.Sprite, ABC):
             self.pos = pygame.Vector2(pygame.mouse.get_pos())
 
 
+from coizera import ui, events
+
+
 class CraftingTable(Building):
     def __init__(self, pos=None, layers=["base"]):
         super().__init__(pos)
@@ -47,14 +54,19 @@ class CraftingTable(Building):
         self.click_cooldown = 0
         self.layers = layers
         self.crafting_rects = []
+        self.buttons = pygame.sprite.Group()
 
         # Dictionary to track the smooth scaling animation for each recipe card
         self.card_scales = {}
 
-        pygame.draw.rect(self.image, (139, 69, 19), (20, 20, 40, 40), border_radius=5)
-        pygame.draw.rect(self.image, (0, 0, 0), (20, 20, 40, 40), 3, border_radius=5)
-        pygame.draw.line(self.image, (0, 0, 0), (40, 20), (40, 60), 2)
-        pygame.draw.line(self.image, (0, 0, 0), (20, 40), (60, 40), 2)
+        self.draw_building()
+
+    def draw_building(self):
+        super().draw_building()
+        pygame.draw.rect(self._surface, (139, 69, 19), (20, 20, 40, 40), border_radius=5)
+        pygame.draw.rect(self._surface, (0, 0, 0), (20, 20, 40, 40), 3, border_radius=5)
+        pygame.draw.line(self._surface, (0, 0, 0), (40, 20), (40, 60), 2)
+        pygame.draw.line(self._surface, (0, 0, 0), (20, 40), (60, 40), 2)
 
     def update(self):
         super().update()
@@ -63,7 +75,9 @@ class CraftingTable(Building):
 
         mouse_pos = pygame.mouse.get_pos()
         if self.rect.collidepoint(mouse_pos) and pygame.mouse.get_pressed()[0]:
-            self.is_active = True
+            if not self.is_active:
+                self.is_active = True
+                self.create_menu()
 
         if (
             self.is_active
@@ -71,12 +85,42 @@ class CraftingTable(Building):
             or pygame.key.get_pressed()[pygame.K_ESCAPE]
         ):
             self.is_active = False
+            self.buttons.empty()
+
+        if self.is_active:
+            self.buttons.update()
+
+    def create_menu(self):
+        start_x = 150
+        start_y = 150
+        row_gap = 140
+        current_y = start_y
+        current_x = start_x
+
+        for r in long_init_stuff.CRAFTING_RECIPES:
+            recipe_data = long_init_stuff.CRAFTING_RECIPES[r]
+
+            if recipe_data["building"] == "Crafting Table":
+                button = ui.LabeledButton(
+                    current_x,
+                    current_y,
+                    150,
+                    120,
+                    r,
+                    events.UI_EVENT,
+                    events.UIEvent("craft_item", {"recipe": r}),
+                )
+                self.buttons.add(button)
+
+                current_y += row_gap
+                if current_y > 550:
+                    current_y = start_y
+                    current_x += 200
 
     def draw_menu(self, screen):
         if not self.is_active:
             return
 
-        inventory = game_state.inventory
         W, H = screen.get_size()
 
         pygame.draw.rect(screen, (139, 69, 19), (0, 0, W, H))
@@ -90,171 +134,7 @@ class CraftingTable(Building):
         title_rect = title_surf.get_rect(center=(W // 2, H - 100))
         screen.blit(title_surf, title_rect)
 
-        start_x = 150
-        start_y = 150
-        row_gap = 200
-        current_y = start_y
-        current_x = start_x
-
-        for r in long_init_stuff.CRAFTING_RECIPES:
-            recipe_data = long_init_stuff.CRAFTING_RECIPES[r]
-
-            if recipe_data["building"] == "Crafting Table":
-                ingredients_dict = recipe_data["ingredients"]
-                card_rect = pygame.Rect(current_x, current_y, 150, 120)
-
-                # Initialize scaling value for this specific card if not already tracked
-                if r not in self.card_scales:
-                    self.card_scales[r] = 1.0
-
-                mouse_pos = pygame.mouse.get_pos()
-                is_hovered = card_rect.collidepoint(mouse_pos)
-
-                # Apply the Target Scale Math (Grow to 1.5 when hovered, sink back to 1.0 when not)
-                target_scale = 1.5 if is_hovered else 1.0
-                self.card_scales[r] += (target_scale - self.card_scales[r]) * 0.2
-
-                # Create a temporary card surface to draw everything on (sized 130x130 to allow room for the shadow offset)
-                card_surf = pygame.Surface((160, 130), pygame.SRCALPHA)
-
-                if recipe_data["result"] not in game_state.player_group.sprite.pitems:
-                    pygame.draw.rect(
-                        card_surf,
-                        ("brown"),
-                        (10, 10, 150, 120),
-                        border_radius=5,
-                    )
-                    pygame.draw.rect(
-                        card_surf,
-                        (100, 100, 100),
-                        (0, 30, 150, 90),
-                        border_radius=5,
-                    )
-                    pygame.draw.rect(card_surf, (10, 10, 10), (0, 0, 150, 120), 10, 5)
-                else:
-                    pygame.draw.rect(
-                        card_surf,
-                        (50, 50, 50),
-                        (10, 10, 150, 120),
-                        border_radius=5,
-                    )
-                    pygame.draw.rect(
-                        card_surf,
-                        (10, 10, 10),
-                        (0, 30, 150, 90),
-                        border_radius=5,
-                    )
-                    pygame.draw.rect(card_surf, (10, 10, 10), (0, 0, 150, 120), 10, 5)
-
-                if is_hovered:
-                    if recipe_data["result"] not in game_state.player_group.sprite.pitems:
-                        pygame.draw.rect(
-                            card_surf, (255, 127, 10), (0, 0, 150, 120), 10, 5
-                        )
-                        if pygame.mouse.get_pressed()[0] and self.click_cooldown == 0:
-                            self.click_cooldown = 15
-
-                            current_counts = {}
-                            for item in inventory:
-                                if item != "empty":
-                                    current_counts[item] = (
-                                        current_counts.get(item, 0) + 1
-                                    )
-
-                            can_craft = True
-                            for ing_name, required_amount in ingredients_dict.items():
-                                if current_counts.get(ing_name, 0) < required_amount:
-                                    can_craft = False
-                                    break
-
-                            if can_craft:
-                                for (
-                                    ing_name,
-                                    required_amount,
-                                ) in ingredients_dict.items():
-                                    removed = 0
-                                    for index in range(len(inventory)):
-                                        if inventory[index] == ing_name:
-                                            inventory[index] = "empty"
-                                            removed += 1
-                                            if removed == required_amount:
-                                                break
-
-                                if recipe_data["result"] in [
-                                    "Mine Ladder",
-                                    "Furnace",
-                                    "Anvil",
-                                    "Monster Portal",
-                                ]:
-                                    random_x = random.randint(100, game_state.W - 100)
-                                    random_y = random.randint(100, game_state.H - 100)
-                                    spawn_pos = pygame.Vector2(random_x, random_y)
-
-                                    if recipe_data["result"] == "Mine Ladder":
-                                        new_building = MineLadder(spawn_pos)
-                                        game_state.buildings_group.add(new_building)
-                                    elif recipe_data["result"] == "Furnace":
-                                        new_building = Furnace(spawn_pos)
-                                        game_state.buildings_group.add(new_building)
-                                    elif recipe_data["result"] == "Anvil":
-                                        new_building = Anvil(spawn_pos)
-                                        game_state.buildings_group.add(new_building)
-                                    elif recipe_data["result"] == "Monster Portal":
-                                        new_building = MonsterPortal(spawn_pos)
-                                        game_state.buildings_group.add(new_building)
-
-                                    self.is_active = False
-                                elif recipe_data["result"] in ["Pickaxe", "Axe"]:
-                                    game_state.player_group.sprite.pitems.append(
-                                        recipe_data["result"]
-                                    )
-                                    self.is_active = False
-                                elif recipe_data["result"] in ["Monstahs"]:
-                                    self.is_active = False
-                                    game_state.effects_group.add(
-                                        effects.Message(
-                                            "Get Ready For Monsters",
-                                            (255, 0, 0),
-                                            game_state.zone,
-                                        )
-                                    )
-                                    game_state.summon_timer = 180
-                                else:
-                                    game_state.add_to_inventory(recipe_data["result"])
-
-                                # Break out to prevent dual-frame crafting clicks
-                                break
-
-                # Render text elements directly onto the card surface instead of the global screen
-                text_surface = ui_font.render(r, True, (0, 0, 0))
-                card_surf.blit(text_surface, (15, 15))
-
-                ing_offset_y = 40
-                for item_name, count in ingredients_dict.items():
-                    ing_text = f"{item_name}: {count}"
-                    ing_surface = ui_font.render(ing_text, True, (255, 255, 255))
-                    card_surf.blit(ing_surface, (15, ing_offset_y))
-                    ing_offset_y += 15
-
-                # Perform the Pygame transformation scaling based on calculated scale factor
-                current_scale = self.card_scales[r]
-                scaled_w = int(130 * current_scale)
-                scaled_h = int(130 * current_scale)
-
-                if scaled_w > 0 and scaled_h > 0:
-                    scaled_surf = pygame.transform.smoothscale(
-                        card_surf, (scaled_w, scaled_h)
-                    )
-                    # Center the newly-scaled surface back perfectly over our default grid layout coordinates
-                    center_x = current_x + 65
-                    center_y = current_y + 65
-                    scaled_rect = scaled_surf.get_rect(center=(center_x, center_y))
-                    screen.blit(scaled_surf, scaled_rect)
-
-                current_y += row_gap
-                if current_y > 550:
-                    current_y = start_y
-                    current_x += row_gap
+        self.buttons.draw(screen)
 
 
 class Furnace(Building):
@@ -274,8 +154,12 @@ class Furnace(Building):
         self.max_coal_level = 900  # 15 seconds at 60 FPS (15 * 60 = 900)
         self.button_scale = 1.0  # Smooth scaling value for "Add Coal" button
 
-        pygame.draw.circle(self.image, (0, 0, 0), (30, 30), 15)
-        pygame.draw.circle(self.image, (200, 200, 200), (30, 30), 15, 5)
+        self.draw_building()
+
+    def draw_building(self):
+        super().draw_building()
+        pygame.draw.circle(self._surface, (0, 0, 0), (30, 30), 15)
+        pygame.draw.circle(self._surface, (200, 200, 200), (30, 30), 15, 5)
 
     def update(self):
         super().update()
@@ -555,11 +439,13 @@ class Anvil(Building):
         # Dictionary to track the smooth scaling animation for each recipe card
         self.card_scales = {}
 
-        self.image.fill((0, 0, 0, 0))
-        pygame.draw.rect(self.image, (184, 115, 51), (0, 10, 80, 60), border_radius=5)
-        pygame.draw.rect(self.image, (53, 87, 72), (0, 10, 80, 60), 10, 5)
+        self.draw_building()
 
-        pygame.draw.line(self.image, ("grey"), (65, 50), (15, 30), 10)
+    def draw_building(self):
+        self._surface.fill((0, 0, 0, 0))
+        pygame.draw.rect(self._surface, (184, 115, 51), (0, 10, 80, 60), border_radius=5)
+        pygame.draw.rect(self._surface, (53, 87, 72), (0, 10, 80, 60), 10, 5)
+        pygame.draw.line(self._surface, ("grey"), (65, 50), (15, 30), 10)
 
     def update(self):
         super().update()
@@ -726,20 +612,23 @@ class MineLadder(Building):
         self.layers = layers
         self.entering = False
 
-        self.image.fill((0, 0, 0, 0))
-        pygame.draw.circle(self.image, (100, 100, 100), (40, 40), 30)
-        pygame.draw.circle(self.image, (0, 0, 0), (40, 40), 25)
+        self.draw_building()
+
+    def draw_building(self):
+        self._surface.fill((0, 0, 0, 0))
+        pygame.draw.circle(self._surface, (100, 100, 100), (40, 40), 30)
+        pygame.draw.circle(self._surface, (0, 0, 0), (40, 40), 25)
         pygame.draw.rect(
-            self.image,
+            self._surface,
             (160, 82, 45),
             (25, 20, 30, 6),
             border_radius=1,
         )
-        pygame.draw.rect(self.image, (0, 0, 0), (25, 20, 30, 6), 1, 1)
-        pygame.draw.rect(self.image, (160, 82, 45), (15, 15, 15, 15), border_radius=1)
-        pygame.draw.rect(self.image, (0, 0, 0), (15, 15, 15, 15), 1, 1)
-        pygame.draw.rect(self.image, (160, 82, 45), (50, 15, 15, 15), border_radius=1)
-        pygame.draw.rect(self.image, (0, 0, 0), (50, 15, 15, 15), 1, 1)
+        pygame.draw.rect(self._surface, (0, 0, 0), (25, 20, 30, 6), 1, 1)
+        pygame.draw.rect(self._surface, (160, 82, 45), (15, 15, 15, 15), border_radius=1)
+        pygame.draw.rect(self._surface, (0, 0, 0), (15, 15, 15, 15), 1, 1)
+        pygame.draw.rect(self._surface, (160, 82, 45), (50, 15, 15, 15), border_radius=1)
+        pygame.draw.rect(self._surface, (0, 0, 0), (50, 15, 15, 15), 1, 1)
 
     def update(self):
         super().update()
@@ -768,20 +657,23 @@ class SuperLadder(Building):
         self.layers = layers
         self.entering = False
 
-        self.image.fill((0, 0, 0, 0))
-        pygame.draw.circle(self.image, (205, 155, 29), (40, 40), 30)
-        pygame.draw.circle(self.image, (200, 50, 0), (40, 40), 25)
+        self.draw_building()
+
+    def draw_building(self):
+        self._surface.fill((0, 0, 0, 0))
+        pygame.draw.circle(self._surface, (205, 155, 29), (40, 40), 30)
+        pygame.draw.circle(self._surface, (200, 50, 0), (40, 40), 25)
         pygame.draw.rect(
-            self.image,
+            self._surface,
             (205, 155, 29),
             (25, 20, 30, 6),
             border_radius=1,
         )
-        pygame.draw.rect(self.image, (0, 0, 0), (25, 20, 30, 6), 1, 1)
-        pygame.draw.rect(self.image, (238, 201, 0), (15, 15, 15, 15), border_radius=1)
-        pygame.draw.rect(self.image, (0, 0, 0), (15, 15, 15, 15), 1, 1)
-        pygame.draw.rect(self.image, (238, 201, 0), (50, 15, 15, 15), border_radius=1)
-        pygame.draw.rect(self.image, (0, 0, 0), (50, 15, 15, 15), 1, 1)
+        pygame.draw.rect(self._surface, (0, 0, 0), (25, 20, 30, 6), 1, 1)
+        pygame.draw.rect(self._surface, (238, 201, 0), (15, 15, 15, 15), border_radius=1)
+        pygame.draw.rect(self._surface, (0, 0, 0), (15, 15, 15, 15), 1, 1)
+        pygame.draw.rect(self._surface, (238, 201, 0), (50, 15, 15, 15), border_radius=1)
+        pygame.draw.rect(self._surface, (0, 0, 0), (50, 15, 15, 15), 1, 1)
 
     def update(self):
         super().update()
@@ -811,7 +703,8 @@ class MonsterPortal(Building):
         self.timer = 0
 
         # Ensure the surface is large enough to fit the orbiting effect (160x160)
-        self.image = pygame.Surface((160, 160), pygame.SRCALPHA).convert_alpha()
+        self._surface = pygame.Surface((160, 160), pygame.SRCALPHA).convert_alpha()
+        self.image = self._surface.copy()
         self.rect = self.image.get_rect(center=self.pos)
 
         # Draw the base shapes once
@@ -820,13 +713,13 @@ class MonsterPortal(Building):
     def draw_portal_shapes(self):
         """Draws the stationary portal base layers centered on the local image coordinates (80, 80)."""
         # 1. DRAW FIRST: The large outer alpha glow (Background layer)
-        pygame.draw.circle(self.image, (255, 0, 255, 100), (80, 80), 40)
+        pygame.draw.circle(self._surface, (255, 0, 255, 100), (80, 80), 40)
 
         # 2. DRAW SECOND: The main solid portal body (Middle layer)
-        pygame.draw.circle(self.image, (255, 0, 255), (80, 80), 30)
+        pygame.draw.circle(self._surface, (255, 0, 255), (80, 80), 30)
 
         # 3. DRAW LAST: The sharp golden rim (Foreground layer)
-        pygame.draw.circle(self.image, (125, 125, 0), (80, 80), 30, 7)
+        pygame.draw.circle(self._surface, (125, 125, 0), (80, 80), 30, 7)
 
     def update(self):
         super().update()

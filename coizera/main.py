@@ -332,6 +332,76 @@ def on_screen_shake(event: events.ScreenShake):
     game_state.screen_shake = max(game_state.screen_shake, event.intensity)
 
 
+
+@pubsub.event_bus.on(events.UI_EVENT)
+def on_ui_event(event: events.UIEvent):
+    if event.event_type == "craft_item":
+        recipe_name = event.payload["recipe"]
+        recipe_data = long_init_stuff.CRAFTING_RECIPES[recipe_name]
+        ingredients_dict = recipe_data["ingredients"]
+        inventory = game_state.inventory
+
+        current_counts = {}
+        for item in inventory:
+            if item != "empty":
+                current_counts[item] = current_counts.get(item, 0) + 1
+
+        can_craft = True
+        for ing_name, required_amount in ingredients_dict.items():
+            if current_counts.get(ing_name, 0) < required_amount:
+                can_craft = False
+                break
+
+        if can_craft:
+            for ing_name, required_amount in ingredients_dict.items():
+                removed = 0
+                for index in range(len(inventory)):
+                    if inventory[index] == ing_name:
+                        inventory[index] = "empty"
+                        removed += 1
+                        if removed == required_amount:
+                            break
+
+            if recipe_data["result"] in [
+                "Mine Ladder",
+                "Furnace",
+                "Anvil",
+                "Monster Portal",
+            ]:
+                random_x = random.randint(100, W - 100)
+                random_y = random.randint(100, H - 100)
+                spawn_pos = pygame.Vector2(random_x, random_y)
+
+                if recipe_data["result"] == "Mine Ladder":
+                    new_building = buildings.MineLadder(spawn_pos)
+                    game_state.buildings_group.add(new_building)
+                elif recipe_data["result"] == "Furnace":
+                    new_building = buildings.Furnace(spawn_pos)
+                    game_state.buildings_group.add(new_building)
+                elif recipe_data["result"] == "Anvil":
+                    new_building = buildings.Anvil(spawn_pos)
+                    game_state.buildings_group.add(new_building)
+                elif recipe_data["result"] == "Monster Portal":
+                    new_building = buildings.MonsterPortal(spawn_pos)
+                    game_state.buildings_group.add(new_building)
+
+            elif recipe_data["result"] in ["Pickaxe", "Axe"]:
+                game_state.player_group.sprite.pitems.append(
+                    recipe_data["result"]
+                )
+            elif recipe_data["result"] in ["Monstahs"]:
+                game_state.effects_group.add(
+                    effects.Message(
+                        "Get Ready For Monsters",
+                        (255, 0, 0),
+                        game_state.zone,
+                    )
+                )
+                game_state.summon_timer = 180
+            else:
+                add_to_inventory(recipe_data["result"])
+
+
 running = True
 while running:
     for event in pygame.event.get():

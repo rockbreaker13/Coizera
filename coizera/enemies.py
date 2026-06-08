@@ -41,7 +41,8 @@ class BaseEnemy(pygame.sprite.Sprite, abc.ABC):
             base_size[1] + self.padding,
         )
 
-        self.image = pygame.Surface(self.surface_size, pygame.SRCALPHA).convert_alpha()
+        self._surface = pygame.Surface(self.surface_size, pygame.SRCALPHA).convert_alpha()
+        self.image = self._surface.copy()
         self.rect = self.image.get_rect(center=self.pos)
 
     def update(self):
@@ -82,16 +83,11 @@ class BaseEnemy(pygame.sprite.Sprite, abc.ABC):
 
         # 4. Draw customized unique animations on the fly
         self.image.fill((0, 0, 0, 0))  # Clean surface background
-        self.draw_visuals()
+        self.image.blit(self._surface, (0, 0))
 
     @abc.abstractmethod
     def update_behavior(self, direction_to_player):
         """All unique enemies must define how they move or attack the player."""
-        pass
-
-    @abc.abstractmethod
-    def draw_visuals(self):
-        """All unique enemies must draw their own distinct shapes and faces onto self.image."""
         pass
 
     def handle_death(self):
@@ -135,6 +131,7 @@ class BouncingSlime(BaseEnemy):
             pos, zone, max_hp=10, max_speed=2.0, damage=1.5, base_size=(50, 40)
         )
         self.animation_timer = random.uniform(0, 10)
+        self._draw_enemy()
 
     def update_behavior(self, direction_to_player):
         self.animation_timer += 0.15
@@ -143,8 +140,11 @@ class BouncingSlime(BaseEnemy):
             self.vel = direction_to_player.normalize() * (self.speed * hop_boost)
         else:
             self.vel = Vector2(0, 0)
+        
+        self._draw_enemy()
 
-    def draw_visuals(self):
+    def _draw_enemy(self):
+        self._surface.fill((0, 0, 0, 0))
         squash = 1.0 + (0.15 * math.sin(self.animation_timer))
         stretch = 1.0 - (0.15 * math.sin(self.animation_timer))
 
@@ -157,15 +157,15 @@ class BouncingSlime(BaseEnemy):
 
         # Core green jelly bubble body
         body_rect = pygame.Rect(offset_x, offset_y, width, height)
-        pygame.draw.ellipse(self.image, (46, 204, 113), body_rect)
-        pygame.draw.ellipse(self.image, (39, 174, 96), body_rect, 4)  # Outline
+        pygame.draw.ellipse(self._surface, (46, 204, 113), body_rect)
+        pygame.draw.ellipse(self._surface, (39, 174, 96), body_rect, 4)  # Outline
 
         # Draw tiny cute facial eyes
         eye_y = body_rect.y + int(height * 0.4)
         left_eye_x = body_rect.x + int(width * 0.3)
         right_eye_x = body_rect.x + int(width * 0.7)
-        pygame.draw.circle(self.image, (0, 0, 0), (left_eye_x, eye_y), 3)
-        pygame.draw.circle(self.image, (0, 0, 0), (right_eye_x, eye_y), 3)
+        pygame.draw.circle(self._surface, (0, 0, 0), (left_eye_x, eye_y), 3)
+        pygame.draw.circle(self._surface, (0, 0, 0), (right_eye_x, eye_y), 3)
 
 
 class ShadowStalker(BaseEnemy):
@@ -182,6 +182,7 @@ class ShadowStalker(BaseEnemy):
         )
         self.pulse = 0.0
         self.alpha = 20
+        self._draw_enemy()
 
     def update_behavior(self, direction_to_player):
         self.pulse += 0.08
@@ -197,8 +198,11 @@ class ShadowStalker(BaseEnemy):
             self.vel = direction_to_player.normalize() * self.speed
         else:
             self.vel = Vector2(0, 0)
+            
+        self._draw_enemy()
 
-    def draw_visuals(self):
+    def _draw_enemy(self):
+        self._surface.fill((0, 0, 0, 0))
         # Match the expanded surface size to safely contain pulsing drawings
         shading_surf = pygame.Surface(self.surface_size, pygame.SRCALPHA)
         center_x = self.surface_size[0] // 2
@@ -238,7 +242,7 @@ class ShadowStalker(BaseEnemy):
             3,
         )
 
-        self.image.blit(shading_surf, (0, 0))
+        self._surface.blit(shading_surf, (0, 0))
 
 
 class MagmaSlime(BaseEnemy):
@@ -252,6 +256,7 @@ class MagmaSlime(BaseEnemy):
         super().__init__(
             pos, zone, max_hp=20, max_speed=2.5, damage=7.5, base_size=(50, 40)
         )
+        self._draw_enemy()
 
     def update_behavior(self, direction_to_player):
         if direction_to_player.length() > 0:
@@ -268,8 +273,11 @@ class MagmaSlime(BaseEnemy):
                 (255, random.randint(0, 255), 0),
             )
         )
+        
+        self._draw_enemy()
 
-    def draw_visuals(self):
+    def _draw_enemy(self):
+        self._surface.fill((0, 0, 0, 0))
         center_x = self.surface_size[0] // 2
         center_y = self.surface_size[1] // 2
 
@@ -279,14 +287,14 @@ class MagmaSlime(BaseEnemy):
 
         # Outer boiling magma shield
         pygame.draw.ellipse(
-            self.image,
+            self._surface,
             (255, 60, 0),
             (offset_x, offset_y, self.base_size[0], self.base_size[1]),
         )
 
         # Bright yellow-hot liquid core
         pygame.draw.ellipse(
-            self.image,
+            self._surface,
             (255, 200, 0),
             (
                 offset_x + 6,
@@ -297,6 +305,6 @@ class MagmaSlime(BaseEnemy):
         )
 
         # Sharp black rock fragments floating safely inside
-        pygame.draw.circle(self.image, (30, 20, 20), (center_x - 12, center_y - 8), 5)
-        pygame.draw.circle(self.image, (30, 20, 20), (center_x + 12, center_y - 4), 6)
-        pygame.draw.circle(self.image, (30, 20, 20), (center_x, center_y + 10), 4)
+        pygame.draw.circle(self._surface, (30, 20, 20), (center_x - 12, center_y - 8), 5)
+        pygame.draw.circle(self._surface, (30, 20, 20), (center_x + 12, center_y - 4), 6)
+        pygame.draw.circle(self._surface, (30, 20, 20), (center_x, center_y + 10), 4)

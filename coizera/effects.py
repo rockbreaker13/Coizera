@@ -16,7 +16,8 @@ class Pop(sprite.Sprite):
         self.v = 5
 
         # 1. Initialize empty sprite attributes required for Y-sorting compatibility
-        self.image = pygame.Surface((1, 1), pygame.SRCALPHA)
+        self._surface = pygame.Surface((1, 1), pygame.SRCALPHA)
+        self.image = self._surface.copy()
         self.rect = self.image.get_rect(center=self.pos)
         self.update_image()
 
@@ -24,17 +25,17 @@ class Pop(sprite.Sprite):
         """Creates a dynamic local surface matching the expanding pop circle."""
         size = int(self.radius * 2)
         if size <= 0:
-            self.image = pygame.Surface((1, 1), pygame.SRCALPHA)
-            self.rect = self.image.get_rect(center=self.pos)
+            self._surface = pygame.Surface((1, 1), pygame.SRCALPHA)
+            self.rect = self._surface.get_rect(center=self.pos)
             return
 
         # 2. Create a clean, transparent surface matching the size of the pop boundary
-        self.image = pygame.Surface((size, size), pygame.SRCALPHA).convert_alpha()
+        self._surface = pygame.Surface((size, size), pygame.SRCALPHA).convert_alpha()
 
         # Draw the circle centered locally (at center, center) instead of globally
         center = size // 2
         pygame.draw.circle(
-            self.image,
+            self._surface,
             self.color,
             (center, center),
             int(self.radius),
@@ -42,7 +43,7 @@ class Pop(sprite.Sprite):
         )
 
         # 3. Keep the drawing rect centered perfectly on our logical position vector
-        self.rect = self.image.get_rect(center=self.pos)
+        self.rect = self._surface.get_rect(center=self.pos)
 
     def update(self):
         self.radius += self.v
@@ -51,6 +52,7 @@ class Pop(sprite.Sprite):
             self.kill()
         else:
             self.update_image()
+            self.image = self._surface.copy()
 
 
 class Message(pygame.sprite.Sprite):
@@ -108,7 +110,6 @@ class Message(pygame.sprite.Sprite):
             self.alpha = 255
 
         # Apply the updated alpha to a fresh copy of the text surface
-        self.image = self.base_image.copy()
         self.image.set_alpha(self.alpha)
 
 
@@ -121,9 +122,10 @@ class Twinkle(pygame.sprite.Sprite):
         self.zone = zone
 
         # Create a transparent surface large enough to fit the star flare
-        self.image = pygame.Surface(
+        self._surface = pygame.Surface(
             (size * 2, size * 2), pygame.SRCALPHA
         ).convert_alpha()
+        self.image = self._surface.copy()
         self.rect = self.image.get_rect(center=self.pos)
 
         # Set a randomized lifespan so multiple twinkles don't pulse at the exact same time
@@ -142,7 +144,7 @@ class Twinkle(pygame.sprite.Sprite):
         alpha = max(0, min(255, alpha))
 
         # Clear old canvas frame
-        self.image.fill((0, 0, 0, 0))
+        self._surface.fill((0, 0, 0, 0))
         center = self.size
 
         # Combine base RGB colors with dynamic alpha
@@ -151,15 +153,15 @@ class Twinkle(pygame.sprite.Sprite):
 
         # Draw a beautiful 4-pointed glowing cross shape
         pygame.draw.line(
-            self.image, color_with_alpha, (center, 0), (center, self.size * 2), 2
+            self._surface, color_with_alpha, (center, 0), (center, self.size * 2), 2
         )
         pygame.draw.line(
-            self.image, color_with_alpha, (0, center), (self.size * 2, center), 2
+            self._surface, color_with_alpha, (0, center), (self.size * 2, center), 2
         )
 
         # Draw a diamond-shaped core in the middle of the flare
         pygame.draw.polygon(
-            self.image,
+            self._surface,
             color_with_alpha,
             [
                 (center, center - self.size // 3),
@@ -170,4 +172,5 @@ class Twinkle(pygame.sprite.Sprite):
         )
 
         # Center the rect back to the absolute coordinate
-        self.rect = self.image.get_rect(center=self.pos)
+        self.rect = self._surface.get_rect(center=self.pos)
+        self.image = self._surface.copy()

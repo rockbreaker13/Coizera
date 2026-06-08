@@ -13,6 +13,12 @@ class PlayerPicksUpItem:
 class ScreenShake:
     intensity: float
 
+@dataclass
+class UIEvent:
+    event_type: str
+    payload: dict
+
 PLAYER_TAKES_DAMAGE = Topic[PlayerTakesDamage]("player:takes_damage")
 PLAYER_PICKS_UP_ITEM = Topic[PlayerPicksUpItem]("player:picks_up_item")
 SCREEN_SHAKE = Topic[ScreenShake]("screen:shake")
+UI_EVENT = Topic[UIEvent]("ui:event")

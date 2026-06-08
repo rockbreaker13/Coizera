@@ -14,8 +14,7 @@ class Item(pygame.sprite.Sprite, ABC):
         self.pos = pygame.math.Vector2(pos)
         self.offset_pos = pos
         self.zone = zone
-        self.shadow = pygame.Surface((240, 240), pygame.SRCALPHA).convert_alpha()
-
+        
         self.animation_time = 0.0
         self.animation_duration = 0.6
         self.is_spawning = True
@@ -118,13 +117,16 @@ class Stick(Item):
         super().__init__(pos, zone)
         # Surface height increased to 40 to fit shadow under the stick
         self.image = pygame.Surface((60, 40), pygame.SRCALPHA)
+        self.draw_stick()
+        self.rect = self.image.get_rect(center=self.pos)
+        self.name = "Stick"
+
+    def draw_stick(self):
         # Flat ground shadow drawn at the bottom
         pygame.draw.ellipse(self.image, (0, 0, 0, 100), (0, 20, 60, 15))
         # Stick model drawn above the shadow
         pygame.draw.rect(self.image, (139, 69, 19), (0, 10, 60, 20), border_radius=3)
         pygame.draw.rect(self.image, (0, 0, 0), (0, 10, 60, 20), 5, 3)
-        self.rect = self.image.get_rect(center=self.pos)
-        self.name = "Stick"
 
     def apply(self):
         pass
@@ -135,13 +137,16 @@ class Rock(Item):
         super().__init__(pos, zone)
         # Surface height increased to 80 to fit shadow under the rock
         self.image = pygame.Surface((60, 80), pygame.SRCALPHA)
+        self.draw_rock()
+        self.rect = self.image.get_rect(center=self.pos)
+        self.name = "Rock"
+
+    def draw_rock(self):
         # Flat ground shadow drawn at the bottom
         pygame.draw.ellipse(self.image, (0, 0, 0, 100), (0, 60, 60, 15))
         # Rock model drawn above the shadow
         pygame.draw.rect(self.image, (127, 127, 127), (0, 5, 60, 60), border_radius=10)
         pygame.draw.rect(self.image, (0, 0, 0), (0, 5, 60, 60), 5, 10)
-        self.rect = self.image.get_rect(center=self.pos)
-        self.name = "Rock"
 
     def apply(self):
         pass
@@ -152,6 +157,11 @@ class Grass(Item):
         super().__init__(pos, zone)
         # Surface height increased to 80 to fit shadow under the grass
         self.image = pygame.Surface((60, 80), pygame.SRCALPHA)
+        self.draw_grass()
+        self.rect = self.image.get_rect(center=self.pos)
+        self.name = "Grass"
+
+    def draw_grass(self):
         # Flat ground shadow drawn at the bottom
         pygame.draw.ellipse(self.image, (0, 0, 0, 100), (0, 60, 60, 15))
         # Grass model drawn above the shadow (offset by y=5)
@@ -166,8 +176,6 @@ class Grass(Item):
             [(0, 5), (10, 65), (50, 65), (60, 5), (40, 35), (30, 5), (20, 35)],
             5,
         )
-        self.rect = self.image.get_rect(center=self.pos)
-        self.name = "Grass"
 
     def apply(self):
         pass
@@ -178,6 +186,12 @@ class Iron(Item):
         super().__init__(pos, zone)
         # Surface height increased to 80 to fit shadow under the iron ore
         self.image = pygame.Surface((60, 80), pygame.SRCALPHA)
+        self.draw_iron()
+        self.rect = self.image.get_rect(center=self.pos)
+        self.name = "Iron"
+        self.tool = "Copper Pickaxe"
+
+    def draw_iron(self):
         # Flat ground shadow drawn at the bottom
         pygame.draw.ellipse(self.image, (0, 0, 0, 100), (0, 60, 60, 15))
         # Iron ore model drawn above the shadow
@@ -197,10 +211,6 @@ class Iron(Item):
         pygame.draw.polygon(self.image, (0, 0, 0), poly2_points, 1)
         pygame.draw.polygon(self.image, (0, 0, 0), poly3_points, 1)
 
-        self.rect = self.image.get_rect(center=self.pos)
-        self.name = "Iron"
-        self.tool = "Copper Pickaxe"
-
     def apply(self):
         pass
 
@@ -210,6 +220,12 @@ class Copper(Item):
         super().__init__(pos, zone)
         # Surface height increased to 80 to fit shadow under the iron ore
         self.image = pygame.Surface((60, 80), pygame.SRCALPHA)
+        self.draw_copper()
+        self.rect = self.image.get_rect(center=self.pos)
+        self.name = "Copper"
+        self.tool = "Pickaxe"
+
+    def draw_copper(self):
         # Flat ground shadow drawn at the bottom
         pygame.draw.ellipse(self.image, (0, 0, 0, 100), (0, 60, 60, 15))
         # Iron ore model drawn above the shadow
@@ -229,10 +245,6 @@ class Copper(Item):
         pygame.draw.polygon(self.image, (0, 0, 0), poly2_points, 1)
         pygame.draw.polygon(self.image, (0, 0, 0), poly3_points, 1)
 
-        self.rect = self.image.get_rect(center=self.pos)
-        self.name = "Copper"
-        self.tool = "Pickaxe"
-
     def apply(self):
         pass
 
@@ -242,13 +254,16 @@ class Coal(Item):
         super().__init__(pos, zone)
         # Surface height increased to 80 to fit shadow under the coal
         self.image = pygame.Surface((60, 80), pygame.SRCALPHA)
+        self.draw_coal()
+        self.rect = self.image.get_rect(center=self.pos)
+        self.name = "Coal"
+
+    def draw_coal(self):
         # Flat ground shadow drawn at the bottom
         pygame.draw.ellipse(self.image, (0, 0, 0, 100), (0, 60, 60, 15))
         # Coal model drawn above the shadow
         pygame.draw.rect(self.image, (20, 20, 20), (0, 5, 60, 60), border_radius=10)
         pygame.draw.rect(self.image, (50, 50, 50), (0, 5, 60, 60), 5, 10)
-        self.rect = self.image.get_rect(center=self.pos)
-        self.name = "Coal"
 
     def apply(self):
         pass
@@ -259,6 +274,12 @@ class Tree(Item):
         super().__init__(pos, zone)
         # Tree surface is already 240x240, which leaves plenty of space for the shadow!
         self.image = pygame.Surface((240, 240), pygame.SRCALPHA)
+        self.draw_tree()
+        self.rect = self.image.get_rect(center=self.pos)
+        self.name = "Tree Log"
+        self.tool = "Axe"
+
+    def draw_tree(self):
         # Shadow drawn underneath the trunk
         pygame.draw.ellipse(self.image, (0, 0, 0, 100), (40, 180, 160, 50))
         # Trunk and roots drawn on top of the shadow
@@ -269,9 +290,6 @@ class Tree(Item):
         # Leaves drawn on top
         pygame.draw.circle(self.image, (0, 150, 0), (120, 100), 90)
         pygame.draw.circle(self.image, ("green"), (120, 100), 80)
-        self.rect = self.image.get_rect(center=self.pos)
-        self.name = "Tree Log"
-        self.tool = "Axe"
 
     def apply(self):
         pass
@@ -281,7 +299,11 @@ class AncientParts(Item):
     def __init__(self, pos, zone):
         super().__init__(pos, zone)
         self.image = pygame.Surface((240, 240), pygame.SRCALPHA)
+        self.draw_ancient_parts()
+        self.rect = self.image.get_rect(center=self.pos)
+        self.name = "Old Parts"
 
+    def draw_ancient_parts(self):
         # 1. Ground Shadow (flat black transparency)
         pygame.draw.ellipse(self.image, (0, 0, 0, 100), (40, 175, 160, 50))
 
@@ -331,9 +353,6 @@ class AncientParts(Item):
         pygame.draw.ellipse(self.image, (40, 100, 20), (83, 152, 18, 11))
         pygame.draw.ellipse(self.image, black, (83, 152, 18, 11), 3)
 
-        self.rect = self.image.get_rect(center=self.pos)
-        self.name = "Old Parts"
-
     def apply(self):
         pass
 
@@ -342,12 +361,15 @@ class DarkEssence(Item):
     def __init__(self, pos, zone):
         super().__init__(pos, zone)
         self.image = pygame.Surface((240, 240), pygame.SRCALPHA)
+        self.draw_dark_essence()
+        self.rect = self.image.get_rect(center=self.pos)
+        self.name = "Darkness"
+
+    def draw_dark_essence(self):
         pygame.draw.ellipse(self.image, (0, 0, 0, 100), (40, 180, 160, 50))
 
         pygame.draw.circle(self.image, (0, 0, 0), (120, 120), 60)
         pygame.draw.circle(self.image, (100, 0, 175), (120, 120), 60, 10)
-        self.rect = self.image.get_rect(center=self.pos)
-        self.name = "Darkness"
 
     def apply(self):
         pass
@@ -358,6 +380,11 @@ class IronIngot(Item):
         super().__init__(pos, zone)
         # Surface height increased to 80 to fit shadow under the iron ore
         self.image = pygame.Surface((60, 80), pygame.SRCALPHA)
+        self.draw_iron_ingot()
+        self.rect = self.image.get_rect(center=self.pos)
+        self.name = "Iron Ingot"
+
+    def draw_iron_ingot(self):
         pygame.draw.ellipse(self.image, (0, 0, 0, 100), (0, 45, 60, 15))
 
         # Ingot body shifted up by 5 pixels to sit right on top of the shadow
@@ -376,9 +403,6 @@ class IronIngot(Item):
         )
         pygame.draw.line(self.image, (100, 50, 50), (25, 20), (40, 5), 3)
 
-        self.rect = self.image.get_rect(center=self.pos)
-        self.name = "Iron Ingot"
-
     def apply(self):
         pass
 
@@ -388,6 +412,11 @@ class IronRod(Item):
         super().__init__(pos, zone)
         # Surface height increased to 80 to fit shadow under the iron ore
         self.image = pygame.Surface((60, 80), pygame.SRCALPHA)
+        self.draw_iron_rod()
+        self.rect = self.image.get_rect(center=self.pos)
+        self.name = "Iron Rod"
+
+    def draw_iron_rod(self):
         pygame.draw.ellipse(self.image, (0, 0, 0, 100), (0, 45, 60, 15))
 
         pygame.draw.polygon(
@@ -405,8 +434,6 @@ class IronRod(Item):
         pygame.draw.circle(self.image, (100, 50, 50), (50, 10), 10)
         pygame.draw.circle(self.image, (210, 100, 50), (10, 50), 10)
         pygame.draw.circle(self.image, (100, 50, 50), (10, 50), 10, 3)
-        self.rect = self.image.get_rect(center=self.pos)
-        self.name = "Iron Rod"
 
     def apply(self):
         pass
@@ -417,7 +444,12 @@ class Magmatite(Item):
         super().__init__(pos, zone)
         # Surface height increased to 80 to fit shadow under the ore
         self.image = pygame.Surface((60, 80), pygame.SRCALPHA)
+        self.draw_magmatite()
+        self.rect = self.image.get_rect(center=self.pos)
+        self.name = "Magmatite"
+        self.tool = "Iron Pickaxe"
 
+    def draw_magmatite(self):
         # Flat ground shadow drawn at the bottom
         pygame.draw.ellipse(self.image, (0, 0, 0, 100), (0, 60, 60, 15))
 
@@ -477,10 +509,6 @@ class Magmatite(Item):
                 self.image, red_orange, (32, 38), (42, 44), width=4
             )  # Low right branch
             pygame.draw.line(self.image, red, (42, 44), (40, 40), width=2)
-
-        self.rect = self.image.get_rect(center=self.pos)
-        self.name = "Magmatite"
-        self.tool = "Iron Pickaxe"
 
     def apply(self):
         pass
