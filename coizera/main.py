@@ -1,17 +1,18 @@
-import pygame
-from pygame import Vector2, sprite
 import random
 from importlib import resources
 
-from coizera import sfx
-from coizera import events
-from coizera import pubsub
-from coizera import game_state
-from coizera import items
+import pygame
+from pygame import Vector2, sprite
+
 from coizera import buildings
 from coizera import effects
-from coizera import long_init_stuff
 from coizera import enemies
+from coizera import events
+from coizera import game_state
+from coizera import items
+from coizera import long_init_stuff
+from coizera import pubsub
+from coizera import sfx
 
 # Pygame setup
 pygame.init()
@@ -31,7 +32,6 @@ show_settings = False
 visible_sprites = []
 
 
-
 # Settings stuff
 volume_rect = pygame.Rect(W // 2, H // 2 - 100, 40, 40)
 exit_button_size = 200
@@ -45,9 +45,6 @@ pygame.mixer.music.set_volume(game_settings["volume"])
 
 pygame.mixer.music.load(resources.files("coizera.assets").joinpath("giggle-touch.mp3"))
 pygame.mixer.music.play(-1)
-
-
-
 
 
 # Initialize item assets
@@ -120,7 +117,7 @@ def add_to_inventory(item_name):
     return False
 
 
-def next_totorial(tutor):
+def next_tutorial(tutor):
     if tutor not in long_init_stuff.TUTORIAL_TEXTS:
         return
     text = long_init_stuff.TUTORIAL_TEXTS[tutor]
@@ -317,7 +314,10 @@ summon_timer = -1
 # ELEGANT REDIRECTION HOOK: Links effects.add to our global effects_group
 # This lets the enemy do effects.add() while keeping the active list inside items.py!
 effects.add = game_state.effects_group.add
-game_state.buildings_group.add(buildings.CraftingTable(Vector2(W // 2 - 80, H // 2 - 80)))
+game_state.buildings_group.add(
+    buildings.CraftingTable(Vector2(W // 2 - 80, H // 2 - 80))
+)
+
 
 # Event Handlers
 @pubsub.event_bus.on(events.PLAYER_PICKS_UP_ITEM)
@@ -326,9 +326,11 @@ def on_item_pickup(event: events.PlayerPicksUpItem):
         sfx.PICKUP.play()
         game_state.total_items = len(game_state.items_group)
 
+
 @pubsub.event_bus.on(events.SCREEN_SHAKE)
 def on_screen_shake(event: events.ScreenShake):
     game_state.screen_shake = max(game_state.screen_shake, event.intensity)
+
 
 running = True
 while running:
@@ -359,12 +361,20 @@ while running:
         if summon_timer == 0:
             for _ in range(random.randint(7, 15)):
                 rand_pos = get_pos_offscreen()
-                game_state.enemy_group.add(spawn_enemy(rand_pos, game_state.zone, enemies.ShadowStalker))
+                game_state.enemy_group.add(
+                    spawn_enemy(rand_pos, game_state.zone, enemies.ShadowStalker)
+                )
 
         # Fix: Correctly inspect instances inside buildings_group to advance tutorial states!
-        has_furnace = any(isinstance(b, buildings.Furnace) for b in game_state.buildings_group)
-        has_ladder = any(isinstance(b, buildings.MineLadder) for b in game_state.buildings_group)
-        has_anvil = any(isinstance(b, buildings.Anvil) for b in game_state.buildings_group)
+        has_furnace = any(
+            isinstance(b, buildings.Furnace) for b in game_state.buildings_group
+        )
+        has_ladder = any(
+            isinstance(b, buildings.MineLadder) for b in game_state.buildings_group
+        )
+        has_anvil = any(
+            isinstance(b, buildings.Anvil) for b in game_state.buildings_group
+        )
         if tutor == "Build Furnace" and has_furnace:
             tutor = "Build Mineladder"
         if tutor == "Build Mineladder" and has_ladder:
@@ -461,7 +471,9 @@ while running:
         pubsub.event_bus.dispatch()
 
     # --- FIXED VACUUM COLLECTION COLLISION ---
-    hits = sprite.spritecollide(game_state.player_group.sprite, game_state.items_group, False)
+    hits = sprite.spritecollide(
+        game_state.player_group.sprite, game_state.items_group, False
+    )
     for item in hits:
         if item.zone == game_state.zone and not item.is_collecting:
             if hasattr(item, "tool"):
@@ -478,9 +490,10 @@ while running:
                 )
                 item.collect()  # Smooth vacuum trigger!
 
-
     # Check player damaged to trigger screen shake
-    hits = sprite.spritecollide(game_state.player_group.sprite, game_state.enemy_group, False)
+    hits = sprite.spritecollide(
+        game_state.player_group.sprite, game_state.enemy_group, False
+    )
     if hits:
         for e in hits:
             if e.zone == game_state.zone:
@@ -534,8 +547,12 @@ while running:
 
     # Calculate active dynamic screen shake offsets
     if game_state.screen_shake > 0.1:
-        shake_x = random.randint(-int(game_state.screen_shake), int(game_state.screen_shake))
-        shake_y = random.randint(-int(game_state.screen_shake), int(game_state.screen_shake))
+        shake_x = random.randint(
+            -int(game_state.screen_shake), int(game_state.screen_shake)
+        )
+        shake_y = random.randint(
+            -int(game_state.screen_shake), int(game_state.screen_shake)
+        )
     else:
         shake_x = 0
         shake_y = 0
@@ -583,7 +600,7 @@ while running:
 
     # Draw the tutorial text here every frame so it stays on top of the background color
     if tutor is not None:
-        next_totorial(tutor)
+        next_tutorial(tutor)
 
     # Inventory HUD overlays
     if show_inv:
@@ -668,9 +685,28 @@ while running:
             game_state.weapons[i] = "empty"  # Deletes the weapon
 
     red_color = min(
-        255, max(0, int(255 - (game_state.player_group.sprite.hp * (255 / game_state.player_group.sprite.max_hp))))
+        255,
+        max(
+            0,
+            int(
+                255
+                - (
+                    game_state.player_group.sprite.hp
+                    * (255 / game_state.player_group.sprite.max_hp)
+                )
+            ),
+        ),
     )
-    green_color = min(255, max(0, int(game_state.player_group.sprite.hp * (255 / game_state.player_group.sprite.max_hp))))
+    green_color = min(
+        255,
+        max(
+            0,
+            int(
+                game_state.player_group.sprite.hp
+                * (255 / game_state.player_group.sprite.max_hp)
+            ),
+        ),
+    )
     pygame.draw.rect(screen, (0, 0, 0), (W - 245, H - 55, 220, 40), border_radius=10)
     pygame.draw.rect(
         screen,
@@ -709,9 +745,14 @@ while running:
         )
         penalty_rect = penalty_text_surf.get_rect(center=(W // 2, H // 2 + 100))
         screen.blit(penalty_text_surf, penalty_rect)
-        if pygame.mouse.get_pressed()[0] and game_state.player_group.sprite.dead_timer <= 0:
+        if (
+            pygame.mouse.get_pressed()[0]
+            and game_state.player_group.sprite.dead_timer <= 0
+        ):
             game_state.player_group.sprite.hp = game_state.player_group.sprite.max_hp
-            game_state.player_group.sprite.target_hp = game_state.player_group.sprite.max_hp
+            game_state.player_group.sprite.target_hp = (
+                game_state.player_group.sprite.max_hp
+            )
             game_state.player_group.sprite.dead = False
             game_state.zone = "base"
     if show_settings:
