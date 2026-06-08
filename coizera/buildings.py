@@ -2,11 +2,10 @@ import pygame
 from abc import ABC, abstractmethod
 import random
 import math
-import sys
 
 from coizera import long_init_stuff
-from coizera import player
 from coizera import effects
+from coizera import game_state
 
 # Fonts init
 pygame.font.init()
@@ -25,13 +24,8 @@ class Building(pygame.sprite.Sprite, ABC):
         if pos is not None:
             self.pos = pos
         else:
-            screen = pygame.display.get_surface()
-            if screen is not None:
-                W, H = screen.get_size()
-            else:
-                W, H = 1280, 720
             self.pos = pygame.Vector2(
-                random.randint(100, W - 100), random.randint(100, H - 100)
+                random.randint(100, game_state.W - 100), random.randint(100, game_state.H - 100)
             )
 
     @abstractmethod
@@ -82,8 +76,7 @@ class CraftingTable(Building):
         if not self.is_active:
             return
 
-        main_mod = sys.modules["__main__"]
-        inventory = main_mod.inventory
+        inventory = game_state.inventory
         W, H = screen.get_size()
 
         pygame.draw.rect(screen, (139, 69, 19), (0, 0, W, H))
@@ -124,7 +117,7 @@ class CraftingTable(Building):
                 # Create a temporary card surface to draw everything on (sized 130x130 to allow room for the shadow offset)
                 card_surf = pygame.Surface((160, 130), pygame.SRCALPHA)
 
-                if not recipe_data["result"] in main_mod.player.sprite.pitems:
+                if recipe_data["result"] not in game_state.player_group.sprite.pitems:
                     pygame.draw.rect(
                         card_surf,
                         ("brown"),
@@ -154,7 +147,7 @@ class CraftingTable(Building):
                     pygame.draw.rect(card_surf, (10, 10, 10), (0, 0, 150, 120), 10, 5)
 
                 if is_hovered:
-                    if not recipe_data["result"] in main_mod.player.sprite.pitems:
+                    if recipe_data["result"] not in game_state.player_group.sprite.pitems:
                         pygame.draw.rect(
                             card_surf, (255, 127, 10), (0, 0, 150, 120), 10, 5
                         )
@@ -193,41 +186,41 @@ class CraftingTable(Building):
                                     "Anvil",
                                     "Monster Portal",
                                 ]:
-                                    random_x = random.randint(100, main_mod.W - 100)
-                                    random_y = random.randint(100, main_mod.H - 100)
+                                    random_x = random.randint(100, game_state.W - 100)
+                                    random_y = random.randint(100, game_state.H - 100)
                                     spawn_pos = pygame.Vector2(random_x, random_y)
 
                                     if recipe_data["result"] == "Mine Ladder":
                                         new_building = MineLadder(spawn_pos)
-                                        main_mod.buildings_group.add(new_building)
+                                        game_state.buildings_group.add(new_building)
                                     elif recipe_data["result"] == "Furnace":
                                         new_building = Furnace(spawn_pos)
-                                        main_mod.buildings_group.add(new_building)
+                                        game_state.buildings_group.add(new_building)
                                     elif recipe_data["result"] == "Anvil":
                                         new_building = Anvil(spawn_pos)
-                                        main_mod.buildings_group.add(new_building)
+                                        game_state.buildings_group.add(new_building)
                                     elif recipe_data["result"] == "Monster Portal":
                                         new_building = MonsterPortal(spawn_pos)
-                                        main_mod.buildings_group.add(new_building)
+                                        game_state.buildings_group.add(new_building)
 
                                     self.is_active = False
                                 elif recipe_data["result"] in ["Pickaxe", "Axe"]:
-                                    main_mod.player.sprite.pitems.append(
+                                    game_state.player_group.sprite.pitems.append(
                                         recipe_data["result"]
                                     )
                                     self.is_active = False
                                 elif recipe_data["result"] in ["Monstahs"]:
                                     self.is_active = False
-                                    main_mod.effects_group.add(
+                                    game_state.effects_group.add(
                                         effects.Message(
                                             "Get Ready For Monsters",
                                             (255, 0, 0),
-                                            main_mod.zone,
+                                            game_state.zone,
                                         )
                                     )
-                                    main_mod.summon_timer = 180
+                                    game_state.summon_timer = 180
                                 else:
-                                    main_mod.add_to_inventory(recipe_data["result"])
+                                    game_state.add_to_inventory(recipe_data["result"])
 
                                 # Break out to prevent dual-frame crafting clicks
                                 break
@@ -307,8 +300,7 @@ class Furnace(Building):
         if not self.is_active:
             return
 
-        main_mod = sys.modules["__main__"]
-        inventory = main_mod.inventory
+        inventory = game_state.inventory
         W, H = screen.get_size()
 
         # Draw main background panel
@@ -394,7 +386,7 @@ class Furnace(Building):
                                         if removed == required_amount:
                                             break
 
-                            main_mod.add_to_inventory(recipe_data["result"])
+                            game_state.add_to_inventory(recipe_data["result"])
                             break
 
                 # Draw recipe title
@@ -503,12 +495,12 @@ class Furnace(Building):
                 self.coal_level = self.max_coal_level
 
                 # Spawn a nice tiny cosmetic smoke/fire explosion
-                main_mod.effects_group.add(
+                game_state.effects_group.add(
                     effects.Pop(
                         self.pos.x,
                         self.pos.y,
                         15,
-                        main_mod.zone,
+                        game_state.zone,
                         (255, 100, 0),
                     )
                 )
@@ -589,8 +581,7 @@ class Anvil(Building):
         if not self.is_active:
             return
 
-        main_mod = sys.modules["__main__"]
-        inventory = main_mod.inventory
+        inventory = game_state.inventory
         W, H = screen.get_size()
 
         pygame.draw.rect(screen, (100, 100, 200), (0, 0, W, H))
@@ -679,11 +670,11 @@ class Anvil(Building):
                                 "Copper Pickaxe",
                                 "Iron Pickaxe",
                             ]:
-                                main_mod.player.sprite.pitems.append(
+                                game_state.player_group.sprite.pitems.append(
                                     recipe_data["result"]
                                 )
                             elif recipe_data["result"] in ["Super Ladder!"]:
-                                main_mod.buildings.add(
+                                game_state.buildings.add(
                                     SuperLadder(
                                         pygame.Vector2(
                                             random.randint(100, W // 2 - 100),
@@ -692,7 +683,7 @@ class Anvil(Building):
                                     )
                                 )
                             else:
-                                main_mod.add_to_inventory(recipe_data["result"])
+                                game_state.add_to_inventory(recipe_data["result"])
 
                             # Break out to prevent dual-frame crafting clicks
                             break
@@ -752,19 +743,17 @@ class MineLadder(Building):
 
     def update(self):
         super().update()
-        main_mod = sys.modules["__main__"]
-        if main_mod.zone in ["mine1", "base"]:
-            if self.rect.collidepoint(main_mod.player.sprite.pos):
+        if game_state.zone in ["mine1", "base"]:
+            if self.rect.collidepoint(game_state.player_group.sprite.pos):
                 if not self.entering:
                     self.entering = True
-                    # Changed from main_mod.layer to main_mod.zone to match your global name update
-                    if main_mod.zone == "base":
-                        main_mod.zone = "mine1"
+                    if game_state.zone == "base":
+                        game_state.zone = "mine1"
                         effects.add(
                             effects.Message("The Mine", (255, 255, 255), "mine1")
                         )
                     else:
-                        main_mod.zone = "base"
+                        game_state.zone = "base"
                         effects.add(
                             effects.Message("Your Base", (255, 255, 255), "base")
                         )
@@ -796,19 +785,17 @@ class SuperLadder(Building):
 
     def update(self):
         super().update()
-        main_mod = sys.modules["__main__"]
-        if main_mod.zone in ["mine2", "base"]:
-            if self.rect.collidepoint(main_mod.player.sprite.pos):
+        if game_state.zone in ["mine2", "base"]:
+            if self.rect.collidepoint(game_state.player_group.sprite.pos):
                 if not self.entering:
                     self.entering = True
-                    # Changed from main_mod.layer to main_mod.zone to match your global name update
-                    if main_mod.zone == "base":
-                        main_mod.zone = "mine2"
+                    if game_state.zone == "base":
+                        game_state.zone = "mine2"
                         effects.add(
                             effects.Message("The Super Mine", (255, 200, 0), "mine2")
                         )
                     else:
-                        main_mod.zone = "base"
+                        game_state.zone = "base"
                         effects.add(
                             effects.Message("Your Base", (255, 255, 255), "base")
                         )
@@ -843,25 +830,24 @@ class MonsterPortal(Building):
 
     def update(self):
         super().update()
-        main_mod = sys.modules["__main__"]
-        if main_mod.zone in ["The Outer Realm", "base"]:
-            if self.rect.collidepoint(main_mod.player.sprite.pos):
+        if game_state.zone in ["The Outer Realm", "base"]:
+            if self.rect.collidepoint(game_state.player_group.sprite.pos):
                 if not self.entering:
                     self.entering = True
-                    if main_mod.zone == "base":
-                        main_mod.zone = "The Outer Realm"
+                    if game_state.zone == "base":
+                        game_state.zone = "The Outer Realm"
                         effects.add(
                             effects.Message(
                                 "The Outer Realm", (255, 0, 255), "The Outer Realm"
                             )
                         )
-                        main_mod.screen_shake = 2
+                        game_state.screen_shake = 2
                     else:
-                        main_mod.zone = "base"
+                        game_state.zone = "base"
                         effects.add(
                             effects.Message("Your Base", (255, 255, 255), "base")
                         )
-                        main_mod.screen_shake = 2
+                        game_state.screen_shake = 2
             else:
                 self.entering = False
 

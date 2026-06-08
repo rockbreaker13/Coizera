@@ -1,12 +1,10 @@
 import pygame
 from pygame import Vector2, sprite
-import sys
 import random
 
 from coizera import events
 from coizera import pubsub
-
-main_mod = sys.modules["__main__"]
+from coizera import game_state
 
 
 class Player(sprite.Sprite):
@@ -14,8 +12,8 @@ class Player(sprite.Sprite):
         super().__init__()
         self.image = pygame.Surface((40, 40), pygame.SRCALPHA)
         self.pos = Vector2(
-            random.randint((main_mod.W // 2) - 100, (main_mod.W // 2) + 100),
-            random.randint((main_mod.H // 2) - 100, (main_mod.H // 2) + 100),
+            random.randint((game_state.W // 2) - 100, (game_state.W // 2) + 100),
+            random.randint((game_state.H // 2) - 100, (game_state.H // 2) + 100),
         )
         self.rect = self.image.get_rect(center=self.pos)
         self.vel = Vector2(0, 0)
@@ -52,14 +50,14 @@ class Player(sprite.Sprite):
 
         if (
             keys[pygame.K_1]
-            and len(main_mod.weapons) > 0
-            and main_mod.weapons[0] != "empty"
+            and len(game_state.weapons) > 0
+            and game_state.weapons[0] != "empty"
         ):
             self.holding = 0
         if (
             keys[pygame.K_2]
-            and len(main_mod.weapons) > 1
-            and main_mod.weapons[1] != "empty"
+            and len(game_state.weapons) > 1
+            and game_state.weapons[1] != "empty"
         ):
             self.holding = 1
 
@@ -68,36 +66,36 @@ class Player(sprite.Sprite):
         self.rect.center = self.pos
 
         # --- ZONE BOUNDARY BLOCKING LOGIC ---
-        if main_mod.zone == "base":
+        if game_state.zone == "base":
             # Only allowed to exit past the right edge (rect.left can cross past W)
             if self.rect.left < 0:
                 self.rect.left = 0
             if self.rect.top < 0:
                 self.rect.top = 0
-            if self.rect.bottom > main_mod.H:
-                self.rect.bottom = main_mod.H
+            if self.rect.bottom > game_state.H:
+                self.rect.bottom = game_state.H
             self.pos.update(self.rect.center)
 
-        elif main_mod.zone == "forest":
+        elif game_state.zone == "forest":
             # Only allowed to exit past the left edge (rect.right can cross past 0)
-            if self.rect.right > main_mod.W:
-                self.rect.right = main_mod.W
+            if self.rect.right > game_state.W:
+                self.rect.right = game_state.W
             if self.rect.top < 0:
                 self.rect.top = 0
-            if self.rect.bottom > main_mod.H:
-                self.rect.bottom = main_mod.H
+            if self.rect.bottom > game_state.H:
+                self.rect.bottom = game_state.H
             self.pos.update(self.rect.center)
 
-        elif main_mod.zone in ["mine1", "mine2", "The Outer Realm"]:
+        elif game_state.zone in ["mine1", "mine2", "The Outer Realm"]:
             # Completely blocked on all 4 sides of the screen
             if self.rect.left < 0:
                 self.rect.left = 0
-            if self.rect.right > main_mod.W:
-                self.rect.right = main_mod.W
+            if self.rect.right > game_state.W:
+                self.rect.right = game_state.W
             if self.rect.top < 0:
                 self.rect.top = 0
-            if self.rect.bottom > main_mod.H:
-                self.rect.bottom = main_mod.H
+            if self.rect.bottom > game_state.H:
+                self.rect.bottom = game_state.H
             self.pos.update(self.rect.center)
 
         # Handle passive health regeneration

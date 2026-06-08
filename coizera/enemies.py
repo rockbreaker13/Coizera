@@ -1,14 +1,11 @@
 import abc
 import math
 import random
-import sys
 import pygame
 from pygame import Vector2
 
-
-# Dynamic reference helper to safely access groups and variables from the main script
-def get_main():
-    return sys.modules["__main__"]
+from coizera import game_state
+from coizera import effects
 
 
 class BaseEnemy(pygame.sprite.Sprite, abc.ABC):
@@ -49,10 +46,8 @@ class BaseEnemy(pygame.sprite.Sprite, abc.ABC):
 
     def update(self):
         """Standard engine ticks that apply to every single enemy."""
-        main_mod = get_main()
-
         # 1. Track player direction and call the unique abstract behavior
-        player_pos = main_mod.player.sprite.pos
+        player_pos = game_state.player_group.sprite.pos
         direction = player_pos - self.pos
 
         # Call the customized abstract behavior (implemented by subclasses)
@@ -63,13 +58,13 @@ class BaseEnemy(pygame.sprite.Sprite, abc.ABC):
         self.rect.center = (int(self.pos.x), int(self.pos.y))
 
         # 2. Check for weapon slice hits & damage triggers
-        weapon = main_mod.weapon.sprite
-        if rect_hits := self.rect.colliderect(weapon.rect):
+        weapon = game_state.weapon_group.sprite
+        if self.rect.colliderect(weapon.rect):
             if weapon.is_swinging and not self.is_attacked:
-                self.hp -= main_mod.player.sprite.dmg
+                self.hp -= game_state.player_group.sprite.dmg
                 self.is_attacked = True
                 self.speed *= -0.5
-                main_mod.screen_shake = 1.5
+                game_state.screen_shake = 1.5
         else:
             self.is_attacked = False
 
@@ -101,12 +96,8 @@ class BaseEnemy(pygame.sprite.Sprite, abc.ABC):
 
     def handle_death(self):
         """Triggers fancy explosion particle pops and distributes loot drop tiers."""
-        main_mod = get_main()
-        import effects
-        import items
-
         # Particle explosion pop
-        main_mod.effects_group.add(
+        game_state.effects_group.add(
             effects.Pop(
                 self.pos.x,
                 self.pos.y,
@@ -118,7 +109,7 @@ class BaseEnemy(pygame.sprite.Sprite, abc.ABC):
 
         # Spawn random loot drops based on our enemy class definitions
         self.drop_loot()
-
+    
     def get_particle_color(self):
         """Override this in your custom class for customized explosion colors!"""
         return (100, 100, 100)
@@ -263,15 +254,12 @@ class MagmaSlime(BaseEnemy):
         )
 
     def update_behavior(self, direction_to_player):
-        main_mod = get_main()
-        import effects
-
         if direction_to_player.length() > 0:
             self.vel = direction_to_player.normalize() * self.speed
         else:
             self.vel = Vector2(0, 0)
 
-        main_mod.effects_group.add(
+        game_state.effects_group.add(
             effects.Twinkle(
                 self.pos.copy()
                 + Vector2(random.randint(-20, 20), random.randint(-20, 20)),

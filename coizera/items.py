@@ -1,10 +1,8 @@
 import pygame
 from abc import ABC, abstractmethod
 import random
-import math
-import sys
 
-main_mod = sys.modules["__main__"]
+from coizera import game_state
 
 
 # Base abstract structural class representing ground collectables
@@ -76,8 +74,8 @@ class Item(pygame.sprite.Sprite, ABC):
             self.collection_progress += (1.0 - self.collection_progress) * 0.2
 
             # Safely fetch the player's current position from the main module
-            if hasattr(main_mod, "player") and main_mod.player.sprite:
-                player_pos = main_mod.player.sprite.pos
+            if game_state.player_group.sprite:
+                player_pos = game_state.player_group.sprite.pos
 
                 # Smoothly slide (lerp) the item's world position directly into the player!
                 # Formula: current + (target - current) * progress

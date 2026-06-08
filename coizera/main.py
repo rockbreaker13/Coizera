@@ -1,12 +1,17 @@
 import pygame
 from pygame import Vector2, sprite
 import random
-import math
 from importlib import resources
 
 from coizera import sfx
 from coizera import events
 from coizera import pubsub
+from coizera import game_state
+from coizera import items
+from coizera import buildings
+from coizera import effects
+from coizera import long_init_stuff
+from coizera import enemies
 
 # Pygame setup
 pygame.init()
@@ -25,16 +30,7 @@ show_inv = False
 show_settings = False
 visible_sprites = []
 
-# Global inventory system
-# fmt: off
-inventory = [
-    "empty","empty","empty","empty","empty",
-    "empty","empty","empty","empty","empty",
-]
-weapons = [
-    "empty","empty"
-]
-# fmt: on
+
 
 # Settings stuff
 volume_rect = pygame.Rect(W // 2, H // 2 - 100, 40, 40)
@@ -45,302 +41,13 @@ clicked = False
 
 game_settings = {"volume": 0.05}
 pygame.mixer.music.set_volume(game_settings["volume"])
-# Lazy imports to prevent circular dependency structures
-from coizera import items
-from coizera import buildings
-from coizera import effects
-from coizera import long_init_stuff
-from coizera import player
-from coizera import enemies
 
 
 pygame.mixer.music.load(resources.files("coizera.assets").joinpath("giggle-touch.mp3"))
 pygame.mixer.music.play(-1)
 
 
-class Weapon(sprite.Sprite):
-    def __init__(self):
-        super().__init__()
-        # Store a clean, unrotated master copy of the weapon
-        self.original_image = pygame.Surface((30, 100), pygame.SRCALPHA).convert_alpha()
-        self.image = self.original_image.copy()
-        self.rect = self.image.get_rect()
 
-        # Smooth lerp state variables
-        self.is_swinging = False
-        self.swing_progress = 0.0  # Runs from 0.0 (start) to 1.0 (end)
-        self.swing_angle = 0
-        self.swing_speed = 0.2  # Setup default swing speed to prevent NameErrors
-
-        # Visual Trace/Slash Trail variables
-        self.trail = []
-        self.trail_surf = pygame.Surface((W, H), pygame.SRCALPHA)
-
-    def update(self):
-        # 1. Safely check if a weapon is active, search our WEAPONS dictionary list, and transfer data
-        holding_idx = player.sprite.holding
-        if (
-            holding_idx is not None
-            and holding_idx < len(weapons)
-            and weapons[holding_idx] != "empty"
-        ):
-            weapon_name = weapons[holding_idx].strip().lower()
-            # Match active weapon name inside our new WEAPONS list of dictionaries
-            weapon_data = next(
-                (w for w in long_init_stuff.WEAPONS if w["name"] == weapon_name),
-                None,
-            )
-            if weapon_data:
-                # Transfer drawn image
-                self.original_image = weapon_data["image"]
-                # Dynamically set player damage according to held weapon stats!
-                player.sprite.dmg = weapon_data["dmg"]
-
-                # --- CHECK FOR SPECIAL EFFECTS & APPLY THEM ---
-                # Safe lookup of the "special" dictionary (defaults to empty dict if missing)
-                special_effects = weapon_data.get("special", {})
-
-                # FIXED: Apply modifiers safely without overwriting each other
-                if "speed" in special_effects:
-                    self.swing_speed = special_effects["speed"]
-                elif "slow" in special_effects:
-                    self.swing_speed = special_effects["slow"]
-                else:
-                    self.swing_speed = 0.12
-
-                self.color = special_effects.get("fire", (255, 255, 255))
-
-            else:
-                # If nothing is held, use a completely transparent surface so nothing draws
-                self.original_image = pygame.Surface(
-                    (1, 1), pygame.SRCALPHA
-                ).convert_alpha()
-                player.sprite.dmg = 0
-                self.swing_speed = (
-                    0.2  # Reset back to default speed when weapon data is invalid
-                )
-        else:
-            # If nothing is held, use a completely transparent surface so nothing draws
-            self.original_image = pygame.Surface(
-                (1, 1), pygame.SRCALPHA
-            ).convert_alpha()
-            player.sprite.dmg = 0
-            self.swing_speed = 0.2  # Reset back to default speed when no weapon is held
-
-        # 2. Get the angle pointing directly to the mouse
-        mouse_pos = pygame.mouse.get_pos()
-        player_pos = player.sprite.pos
-        direction = pygame.math.Vector2(mouse_pos) - player_pos
-        if weapon:
-            pass
-        if direction.length() > 0:
-            # Trigonometry to get base angle (0 is East, 90 is North)
-            base_angle = math.degrees(math.atan2(-direction.y, direction.x))
-        else:
-            base_angle = 90.0
-
-        # 3. Proper Progress-Based Lerp Swing Logic
-        if pygame.mouse.get_pressed()[0] and not self.is_swinging:
-            self.is_swinging = True
-            self.swing_progress = 0.0
-            self.trail.clear()  # Refresh trail on active click
-
-            # --- FIXED: Only fire projectiles if holding the Inferno weapon ---
-            holding_idx = player.sprite.holding
-            if (
-                holding_idx is not None
-                and holding_idx < len(weapons)
-                and weapons[holding_idx].strip().lower() == "inferno"
-            ):
-                for d in range(3):
-                    projectiles_group.add(
-                        Projectile(
-                            player,
-                            "fire",
-                            player.sprite.pos.copy(),
-                            10,
-                            direction,
-                            zone,
-                        )
-                    )
-
-        if self.is_swinging:
-            # Smoothly transition progress towards 1.0 (Uses the updated dynamic swing_speed!)
-            self.swing_progress += (1.0 - self.swing_progress) * self.swing_speed
-            # Map progress to our swing angle (+45 to -45 gives a clean 90-degree wedge)
-            self.swing_angle = 90 + self.swing_progress * (-90 - 90)
-
-            # Once we are basically finished with the lerp, reset
-            if self.swing_progress >= 0.98:
-                self.is_swinging = False
-                self.swing_progress = 0.0
-                self.trail.clear()  # Erase trail upon swing completion
-        else:
-            self.swing_progress += (1.0 - self.swing_progress) * 0.25
-            # Map progress to our swing angle
-            self.swing_angle = -90 + self.swing_progress * 180
-
-        # 4. Combine base mouse angle with our swing angle offset
-        final_angle = base_angle + self.swing_angle
-
-        # 5. Rotate the newly transferred original_image copy
-        self.image = pygame.transform.rotate(self.original_image, final_angle - 90)
-
-        # 6. Push the sword forward in front of the player
-        rad = math.radians(final_angle)
-        offset_vector = pygame.math.Vector2(math.cos(rad), -math.sin(rad))
-        # Adjust '75' to change how far out from the player the sword is positioned
-        sword_distance = 75
-        self.rect = self.image.get_rect(
-            center=player_pos + offset_vector * sword_distance
-        )
-
-        # 7. Record position history using our substepping logic!
-        if self.is_swinging:
-            hilt_pos = player_pos + offset_vector * 35
-            tip_pos = player_pos + offset_vector * 125
-            self.update_trail(hilt_pos, tip_pos)
-
-    def update_trail(self, hilt_pos, tip_pos):
-        """Generates smooth, intermediate points between frames using vector substepping."""
-        if self.is_swinging:
-            # If we have a previous position, interpolate intermediate steps
-            if self.trail:
-                last_hilt, last_tip = self.trail[-1]
-                substeps = 4  # Number of segments to split the gap into
-                for step in range(1, substeps + 1):
-                    t = step / substeps
-                    # Linearly interpolate (lerp) hilt and tip positions
-                    sub_hilt = last_hilt.lerp(hilt_pos, t)
-                    sub_tip = last_tip.lerp(tip_pos, t)
-                    self.trail.append((sub_hilt, sub_tip))
-            else:
-                self.trail.append((hilt_pos, tip_pos))
-
-            # Maintain maximum length history boundary (increased because we have substeps now!)
-            if len(self.trail) > 30:
-                self.trail.pop(0)
-
-    def draw_trail(self, surface, offset_x=0, offset_y=0):
-        """Draws the fading sword trace on the main screen with substepping smoothing."""
-        if not self.trail or len(self.trail) < 2:
-            return
-
-        # Dynamically resize the trail surface if it doesn't match the current display window size
-        target_size = surface.get_size()
-        if self.trail_surf.get_size() != target_size:
-            self.trail_surf = pygame.Surface(target_size, pygame.SRCALPHA)
-
-        self.trail_surf.fill((0, 0, 0, 0))  # Clear transparency buffer
-
-        # 1. Draw the main fading body of the slash
-        for i in range(len(self.trail) - 1):
-            hilt_curr, tip_curr = self.trail[i]
-            hilt_next, tip_next = self.trail[i + 1]
-            # Fading alpha
-            alpha = int(180 * (i / len(self.trail)))
-            color = (self.color[0], self.color[1], self.color[2], alpha)
-            quad_points = [hilt_curr, tip_curr, tip_next, hilt_next]
-            pygame.draw.polygon(self.trail_surf, color, quad_points)
-
-        # 2. Draw the EXTRA slash highlight right at the tip of the blade!
-        if len(self.trail) >= 8:
-            # Grab the last few tip positions (more points because of substepping)
-            tip_points = [tip for hilt, tip in self.trail[-8:]]
-            # Draw a bright, solid white line connecting the recent tips to define a sharp cutting edge
-            pygame.draw.lines(
-                self.trail_surf,
-                (self.color[0], self.color[1], self.color[2], 200),
-                False,
-                tip_points,
-                4,
-            )
-
-        # Blit the composite trace surface onto the main display, offset by the active screen shake values
-        surface.blit(self.trail_surf, (offset_x, offset_y))
-
-
-class Projectile(pygame.sprite.Sprite):
-    def __init__(self, is_from, kind, pos, speed, direction, zone):
-        super().__init__()
-        self.is_from = is_from
-        self.kind = kind
-        self.zone = zone
-
-        # Store positions as floating-point vectors for smooth movement
-        self.pos = pygame.math.Vector2(pos)
-        self.speed = speed
-
-        # 1. Normalize the direction vector so its total length equals 1
-        if direction.length() > 0:
-            self.direction = direction.normalize()
-        else:
-            self.direction = pygame.math.Vector2(1, 0)  # Default to East if zero length
-
-        if self.kind.strip().lower() == "fire":
-            self.image = pygame.Surface((100, 100), pygame.SRCALPHA).convert_alpha()
-
-            # Draw from largest (outermost/most transparent) to smallest (innermost/opaque)
-            for i in reversed(range(10)):
-                # Smooth transparency curve: scale linearly so outer rings are very faint (maximum alpha around 80)
-                alpha_val = int(100 * (1.0 - (i / 10.0)))
-                pygame.draw.circle(
-                    self.image,
-                    (255, 180, 0, alpha_val),  # Golden yellow transparent glow
-                    (50, 50),
-                    (i + 1) * 5,
-                )
-            # Solid cores in the center
-            pygame.draw.circle(self.image, (255, 0, 0), (50, 50), 25)
-            pygame.draw.circle(self.image, (255, 127, 0), (50, 50), 17.5)
-            pygame.draw.circle(self.image, (255, 255, 0), (50, 50), 10)
-            pygame.draw.circle(self.image, (255, 255, 200), (50, 50), 2.5)
-
-            # Rotate the visual image to face the direction it is flying
-            angle = math.degrees(math.atan2(-self.direction.y, self.direction.x))
-            self.image = pygame.transform.rotate(self.image, angle)
-
-        self.rect = self.image.get_rect(center=self.pos)
-
-    def update(self, targets_group):
-        global screen_shake
-        # 2. Move the precise float position forward
-        self.pos += self.direction * self.speed
-
-        # 3. Snap the integer pixel rect to our precise float position
-        self.rect.center = (int(self.pos.x), int(self.pos.y))
-
-        # 4. Check for screen boundaries (leaves the interface)
-        if (
-            self.rect.right < 0
-            or self.rect.left > W
-            or self.rect.bottom < 0
-            or self.rect.top > H
-        ):
-            self.kill()  # Safely erases the sprite from all groups
-            return
-
-        # 5. Check for target collisions using Pygame's sprite collisions
-        hit_list = pygame.sprite.spritecollide(self, targets_group, False)
-        for target in hit_list:
-            if target != self.is_from:
-                # Deduct damage if targets have health
-                if hasattr(target, "hp"):
-                    if self.kind.strip().lower() == "fire":
-                        target.hp -= 2  # The fire projectile should do 2 damage!
-                        screen_shake = max(
-                            screen_shake, 0.5
-                        )  # Small dynamic explosion shake
-                    else:
-                        target.hp -= player.sprite.dmg
-                self.kill()  # Destroy projectile upon impacting a valid target
-                if self.kind == "fire":
-                    effects_group.add(
-                        effects.Pop(
-                            self.pos.x, self.pos.y, 30, self.zone, (255, 180, 0)
-                        )
-                    )
-                break
 
 
 # Initialize item assets
@@ -401,14 +108,14 @@ def draw_item_icon(surface, item_name, x, y, size):
 def add_to_inventory(item_name):
     """Finds next available empty index block and populates with crafted element."""
     if item_name in ["Iron Shortsword", "Iron Broadsword", "Pointy Copper"]:
-        for index in range(len(weapons)):
-            if weapons[index] == "empty":
-                weapons[index] = item_name
+        for index in range(len(game_state.weapons)):
+            if game_state.weapons[index] == "empty":
+                game_state.weapons[index] = item_name
                 return True
     else:
-        for index in range(len(inventory)):
-            if inventory[index] == "empty":
-                inventory[index] = item_name
+        for index in range(len(game_state.inventory)):
+            if game_state.inventory[index] == "empty":
+                game_state.inventory[index] = item_name
                 return True
     return False
 
@@ -544,14 +251,16 @@ def spawn_enemy(pos, zone, enemy=None):
 
 def draw_mouse(mpos):
     # 2. Tell Python to use the global variable, not a temporary local one
-    global cmss, zone, clicked
+    global cmss, clicked
 
     if pygame.mouse.get_pressed()[0]:
         MCOLOR1 = (0, 200, 200)  # Cyan outline
         MCOLOR2 = (0, 255, 255)  # Cyan fill
         tmss = 240
         if not clicked:
-            effects_group.add(effects.Pop(mpos.x, mpos.y, 10, zone, (255, 127, 0)))
+            game_state.effects_group.add(
+                effects.Pop(mpos.x, mpos.y, 10, game_state.zone, (255, 127, 0))
+            )
         clicked = True
     else:
         MCOLOR1 = (200, 0, 0)  # Red outline
@@ -602,40 +311,24 @@ def draw_mouse(mpos):
 item_pool = []
 item_timer = 0
 max_item_timer = 90
-total_items = 0
 tutor = "Learn Controls"
-zone = "base"
 summon_timer = -1
-
-# Screen Shake Variables
-screen_shake = 0.0
-
-# Sprite Groups
-player = sprite.GroupSingle(player.Player())
-items_group = sprite.Group()
-buildings_group = sprite.Group()
-weapon = sprite.GroupSingle(Weapon())
-enemy_group = sprite.Group()
-effects_group = sprite.Group()
-projectiles_group = sprite.Group()
 
 # ELEGANT REDIRECTION HOOK: Links effects.add to our global effects_group
 # This lets the enemy do effects.add() while keeping the active list inside items.py!
-effects.add = effects_group.add
-buildings_group.add(buildings.CraftingTable(Vector2(W // 2 - 80, H // 2 - 80)))
+effects.add = game_state.effects_group.add
+game_state.buildings_group.add(buildings.CraftingTable(Vector2(W // 2 - 80, H // 2 - 80)))
 
 # Event Handlers
 @pubsub.event_bus.on(events.PLAYER_PICKS_UP_ITEM)
 def on_item_pickup(event: events.PlayerPicksUpItem):
-    global total_items
     if add_to_inventory(event.item_name):
         sfx.PICKUP.play()
-        total_items = len(items_group)
+        game_state.total_items = len(game_state.items_group)
 
 @pubsub.event_bus.on(events.SCREEN_SHAKE)
 def on_screen_shake(event: events.ScreenShake):
-    global screen_shake
-    screen_shake = max(screen_shake, event.intensity)
+    game_state.screen_shake = max(game_state.screen_shake, event.intensity)
 
 running = True
 while running:
@@ -647,15 +340,15 @@ while running:
             # screen = pygame.display.set_mode((W, H), vsync=True, flags=pygame.RESIZABLE)
             volume_rect.center = (W // 2, H // 2 - 100)
         if event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_e and not player.sprite.dead:
+            if event.key == pygame.K_e and not game_state.player_group.sprite.dead:
                 show_inv = not show_inv  # Toggles exactly once per press
             # Toggles settings menu EXACTWA once per key down
-            if event.key == pygame.K_ESCAPE and not player.sprite.dead:
+            if event.key == pygame.K_ESCAPE and not game_state.player_group.sprite.dead:
                 show_settings = not show_settings
     if not show_settings:
         keys = pygame.key.get_pressed()
         if keys[pygame.K_z]:
-            items_group.empty()
+            game_state.items_group.empty()
         if keys[pygame.K_t]:
             if tutor == "Learn Controls":
                 tutor = "Build Furnace"
@@ -666,134 +359,137 @@ while running:
         if summon_timer == 0:
             for _ in range(random.randint(7, 15)):
                 rand_pos = get_pos_offscreen()
-                enemy_group.add(spawn_enemy(rand_pos, zone, enemies.ShadowStalker))
+                game_state.enemy_group.add(spawn_enemy(rand_pos, game_state.zone, enemies.ShadowStalker))
 
         # Fix: Correctly inspect instances inside buildings_group to advance tutorial states!
-        has_furnace = any(isinstance(b, buildings.Furnace) for b in buildings_group)
-        has_ladder = any(isinstance(b, buildings.MineLadder) for b in buildings_group)
-        has_anvil = any(isinstance(b, buildings.Anvil) for b in buildings_group)
+        has_furnace = any(isinstance(b, buildings.Furnace) for b in game_state.buildings_group)
+        has_ladder = any(isinstance(b, buildings.MineLadder) for b in game_state.buildings_group)
+        has_anvil = any(isinstance(b, buildings.Anvil) for b in game_state.buildings_group)
         if tutor == "Build Furnace" and has_furnace:
             tutor = "Build Mineladder"
         if tutor == "Build Mineladder" and has_ladder:
             tutor = "Get Tools"
-        if tutor == "Get Tools" and "Pickaxe" in player.sprite.pitems:
+        if tutor == "Get Tools" and "Pickaxe" in game_state.player_group.sprite.pitems:
             tutor = "Build Anvil"
         if tutor == "Build Anvil" and has_anvil:
             tutor = "End of Beginning"
 
         # --- DYNAMICALLY CHECK FOR AT LEAST ONE ACTIVE WEAPON ---
-        has_weapon = any(w != "empty" for w in weapons)
+        has_weapon = any(w != "empty" for w in game_state.weapons)
 
         # Spawn mechanics over game ticks
-        if zone == "The Outer Realm":
+        if game_state.zone == "The Outer Realm":
             item_timer += 1
             if item_timer >= max_item_timer:
                 # ONLY spawn if player has at least one weapon!
                 if has_weapon and random.randint(1, 4) == 2:
                     item_timer = 0
-                    if total_items < 25:
+                    if game_state.total_items < 25:
                         # Fixed: Correctly call your spawn_enemy() helper
-                        enemy_group.add(
+                        game_state.enemy_group.add(
                             spawn_enemy(
                                 Vector2(
                                     random.randint(100, W - 100),
                                     random.randint(100, H - 100),
                                 ),
-                                zone,
+                                game_state.zone,
                             )
                         )
                 elif random.randint(1, 100) == 1:
-                    if total_items < 25:
-                        items_group.add(
+                    if game_state.total_items < 25:
+                        game_state.items_group.add(
                             random.choice(item_pool)(
                                 Vector2(
                                     random.randint(100, W - 100),
                                     random.randint(100, H - 100),
                                 ),
-                                zone,
+                                game_state.zone,
                             )
                         )
-                    total_items = len(items_group)
+                    game_state.total_items = len(game_state.items_group)
                     item_timer = 0
         else:
             item_timer += 1
             if item_timer >= max_item_timer:
                 # Base/forest/mine zone spawns check for weapons as well!
                 if has_weapon and random.randint(1, 2) == 1:
-                    enemy_group.add(
+                    game_state.enemy_group.add(
                         spawn_enemy(
                             Vector2(
                                 random.randint(100, W - 100),
                                 random.randint(100, H - 100),
                             ),
-                            zone,
+                            game_state.zone,
                         )
                     )
-                elif total_items < 25:
-                    items_group.add(
+                elif game_state.total_items < 25:
+                    game_state.items_group.add(
                         random.choice(item_pool)(
                             Vector2(
                                 random.randint(100, W - 100),
                                 random.randint(100, H - 100),
                             ),
-                            zone,
+                            game_state.zone,
                         )
                     )
-                total_items = len(items_group)
+                game_state.total_items = len(game_state.items_group)
                 item_timer = 0
 
         # --- FIXED TRANSITIONS ---
-        if zone == "base" and player.sprite.pos.x > W:
-            player.sprite.pos.x = 10
-            zone = "forest"
-        elif zone == "forest" and player.sprite.pos.x < 0:
-            player.sprite.pos.x = W - 10
-            zone = "base"
-        if not player.sprite.dead:
-            player.update()
-        if player.sprite.holding != None:
-            weapon.update()
-        items_group.update()
-        enemy_group.update()
-        effects_group.update()
+        if game_state.zone == "base" and game_state.player_group.sprite.pos.x > W:
+            game_state.player_group.sprite.pos.x = 10
+            game_state.zone = "forest"
+        elif game_state.zone == "forest" and game_state.player_group.sprite.pos.x < 0:
+            game_state.player_group.sprite.pos.x = W - 10
+            game_state.zone = "base"
+        if not game_state.player_group.sprite.dead:
+            game_state.player_group.update()
+        if game_state.player_group.sprite.holding is not None:
+            game_state.weapon_group.update()
+        game_state.items_group.update()
+        game_state.enemy_group.update()
+        game_state.effects_group.update()
 
         # --- PASSING enemy_group TO UPDATE HERE ---
-        projectiles_group.update(enemy_group)
+        game_state.projectiles_group.update(game_state.enemy_group)
 
         # Decay screen shake smoothly over frames
-        screen_shake *= 0.9
-        if screen_shake < 0.1:
-            screen_shake = 0.0
+        game_state.screen_shake *= 0.9
+        if game_state.screen_shake < 0.1:
+            game_state.screen_shake = 0.0
+
+        pubsub.event_bus.dispatch()
 
     # --- FIXED VACUUM COLLECTION COLLISION ---
-    hits = sprite.spritecollide(player.sprite, items_group, False)
+    hits = sprite.spritecollide(game_state.player_group.sprite, game_state.items_group, False)
     for item in hits:
-        if item.zone == zone and not item.is_collecting:
+        if item.zone == game_state.zone and not item.is_collecting:
             if hasattr(item, "tool"):
-                if item.tool in player.sprite.pitems:
-                    if add_to_inventory(item.name):
-                        item.collect()  # Smooth vacuum trigger!
-                        sfx.PICKUP.play()
-                        total_items = len(items_group)
-            else:
-                if add_to_inventory(item.name):
+                if item.tool in game_state.player_group.sprite.pitems:
+                    pubsub.event_bus.publish(
+                        events.PLAYER_PICKS_UP_ITEM,
+                        events.PlayerPicksUpItem(item_name=item.name),
+                    )
                     item.collect()  # Smooth vacuum trigger!
-                    sfx.PICKUP.play()
-                    total_items = len(items_group)
+            else:
+                pubsub.event_bus.publish(
+                    events.PLAYER_PICKS_UP_ITEM,
+                    events.PlayerPicksUpItem(item_name=item.name),
+                )
+                item.collect()  # Smooth vacuum trigger!
+
 
     # Check player damaged to trigger screen shake
-    hits = sprite.spritecollide(player.sprite, enemy_group, False)
-    if hits and player.sprite.attacked <= 0:
+    hits = sprite.spritecollide(game_state.player_group.sprite, game_state.enemy_group, False)
+    if hits:
         for e in hits:
-            if e.zone == zone:
-                player.sprite.target_hp = player.sprite.hp - e.dmg
-                player.sprite.attacked = 30
-                screen_shake = max(
-                    screen_shake, 3
-                )  # Solid concrete screen shake on hit!
+            if e.zone == game_state.zone:
+                pubsub.event_bus.publish(
+                    events.PLAYER_TAKES_DAMAGE, events.PlayerTakesDamage(damage=e.dmg)
+                )
 
     # Core background & pool updates
-    if zone == "base":
+    if game_state.zone == "base":
         screen.fill((100, 175, 0))
         if tutor == "Build Furnace":
             item_pool = [items.Rock]
@@ -801,74 +497,74 @@ while running:
             item_pool = [items.Stick]
         else:
             item_pool = [items.Stick, items.Rock, items.Grass]
-    elif zone == "mine1":
+    elif game_state.zone == "mine1":
         screen.fill((75, 75, 75))
         if tutor == "Build Anvil":
             item_pool = [items.Copper, items.Coal]
         else:
             item_pool = [items.Rock, items.Iron, items.Coal, items.Copper]
-    elif zone == "mine2":
+    elif game_state.zone == "mine2":
         screen.fill((20, 20, 20))
         item_pool = [items.Iron, items.Magmatite]
         if random.randint(1, 120) == 1 and not show_settings:
-            effects_group.add(
+            game_state.effects_group.add(
                 effects.Twinkle(
                     Vector2(random.randint(0, W), random.randint(0, H)),
                     random.randint(5, 10),
-                    zone,
+                    game_state.zone,
                     (255, random.randint(0, 255), 0),
                 )
             )
-    elif zone == "forest":
+    elif game_state.zone == "forest":
         screen.fill((0, 100, 0))
         item_pool = [items.Stick, items.Grass, items.Tree]
-    elif zone == "The Outer Realm":
+    elif game_state.zone == "The Outer Realm":
         screen.fill((50, 25, 75))
         # FIXED: Reduced twinkle spawning from 1-in-10 to 1-in-120 to eliminate lag!
         if random.randint(1, 120) == 1 and not show_settings:
-            effects_group.add(
+            game_state.effects_group.add(
                 effects.Twinkle(
                     Vector2(random.randint(0, W), random.randint(0, H)),
                     random.randint(5, 10),
-                    zone,
+                    game_state.zone,
                     (255, 0, 255),
                 )
             )
         item_pool = [items.DarkEssence]
 
     # Calculate active dynamic screen shake offsets
-    if screen_shake > 0.1:
-        shake_x = random.randint(-int(screen_shake), int(screen_shake))
-        shake_y = random.randint(-int(screen_shake), int(screen_shake))
+    if game_state.screen_shake > 0.1:
+        shake_x = random.randint(-int(game_state.screen_shake), int(game_state.screen_shake))
+        shake_y = random.randint(-int(game_state.screen_shake), int(game_state.screen_shake))
     else:
         shake_x = 0
         shake_y = 0
 
     # Rendering game world
-    for item in items_group:
-        if item.zone == zone:
+    for item in game_state.items_group:
+        if item.zone == game_state.zone:
             visible_sprites.append(item)
-    for e in enemy_group:
-        if e.zone == zone:
+    for e in game_state.enemy_group:
+        if e.zone == game_state.zone:
             visible_sprites.append(e)
-    for building in buildings_group:
-        if zone in building.layers:
+    for building in game_state.buildings_group:
+        if game_state.zone in building.layers:
             visible_sprites.append(building)
     # Include our active effects directly in the depth sorting pool!
-    for fx in effects_group:
-        if fx.zone == zone:
+    for fx in game_state.effects_group:
+        if fx.zone == game_state.zone:
             visible_sprites.append(fx)
 
-    for p in projectiles_group:
-        if p.zone == zone:
+    for p in game_state.projectiles_group:
+        if p.zone == game_state.zone:
             visible_sprites.append(p)
-    visible_sprites.append(weapon.sprite)
-    visible_sprites.append(player.sprite)
+    visible_sprites.append(game_state.weapon_group.sprite)
+    visible_sprites.append(game_state.player_group.sprite)
     visible_sprites.sort(key=lambda sprite: sprite.rect.bottom)
 
     # Draw the weapon slash trail OVER everything else (shaken!)
-    if player.sprite.holding != None:
-        weapon.sprite.draw_trail(screen, shake_x, shake_y)
+    if game_state.player_group.sprite.holding is not None:
+        game_state.weapon_group.sprite.draw_trail(screen, shake_x, shake_y)
 
     for spr in visible_sprites:
         # Offset drawings dynamically by shake coordinates
@@ -876,12 +572,12 @@ while running:
         screen.blit(spr.image, shaken_rect)
 
     # Building systems tick checks
-    for b in buildings_group:
-        if zone in b.layers:
+    for b in game_state.buildings_group:
+        if game_state.zone in b.layers:
             b.update()
 
     # Draw active menus
-    for b in buildings_group:
+    for b in game_state.buildings_group:
         if hasattr(b, "draw_menu"):
             b.draw_menu(screen)
 
@@ -914,7 +610,7 @@ while running:
                     2,
                     border_radius=5,
                 )
-                item_in_slot = inventory[index]
+                item_in_slot = game_state.inventory[index]
                 if item_in_slot != "empty":
                     draw_item_icon(screen, item_in_slot, x, y, slot_size)
                 icon_rect = pygame.Rect(x, y, slot_size, slot_size)
@@ -923,7 +619,7 @@ while running:
                     and pygame.mouse.get_pressed()[0]
                     and pygame.key.get_pressed()[pygame.K_x]
                 ):
-                    inventory[index] = "empty"
+                    game_state.inventory[index] = "empty"
                     item_in_slot = "empty"
                 if item_in_slot != "empty":
                     text_surface = font.render(item_in_slot, True, (240, 240, 240))
@@ -958,7 +654,7 @@ while running:
         pygame.draw.circle(screen, (80, 80, 80), pos, 50)
         pygame.draw.circle(screen, (200, 200, 200), pos, 50, 2)
         # 2. Draw the weapon icon if not empty
-        current_weapon = weapons[i]
+        current_weapon = game_state.weapons[i]
         if current_weapon != "empty":
             draw_item_icon(screen, current_weapon, pos[0] - 50, pos[1] - 50, 100)
         # 3. Check for Hover + Click + 'X' key press using circular collision
@@ -969,27 +665,27 @@ while running:
             and pygame.mouse.get_pressed()[0]
             and pygame.key.get_pressed()[pygame.K_x]
         ):
-            weapons[i] = "empty"  # Deletes the weapon
+            game_state.weapons[i] = "empty"  # Deletes the weapon
 
     red_color = min(
-        255, max(0, int(255 - (player.sprite.hp * (255 / player.sprite.max_hp))))
+        255, max(0, int(255 - (game_state.player_group.sprite.hp * (255 / game_state.player_group.sprite.max_hp))))
     )
-    green_color = min(255, max(0, int(player.sprite.hp * (255 / player.sprite.max_hp))))
+    green_color = min(255, max(0, int(game_state.player_group.sprite.hp * (255 / game_state.player_group.sprite.max_hp))))
     pygame.draw.rect(screen, (0, 0, 0), (W - 245, H - 55, 220, 40), border_radius=10)
     pygame.draw.rect(
         screen,
         (red_color, green_color, 0),
-        (W - 235, H - 45, max(0, int(player.sprite.hp * 10)), 20),
+        (W - 235, H - 45, max(0, int(game_state.player_group.sprite.hp * 10)), 20),
         border_radius=10,
     )
 
     # Check player death states
-    if player.sprite.dead:
-        player.sprite.dead_timer -= 1
-        enemy_group.empty()
-        inventory.clear()
+    if game_state.player_group.sprite.dead:
+        game_state.player_group.sprite.dead_timer -= 1
+        game_state.enemy_group.empty()
+        game_state.inventory.clear()
         for _ in range(10):
-            inventory.append("empty")
+            game_state.inventory.append("empty")
         # 1. Draw the dark background overlay
         dark_surf = pygame.Surface((W, H), pygame.SRCALPHA)
         pygame.draw.rect(dark_surf, (0, 0, 0, 200), (0, 0, W, H))
@@ -1013,11 +709,11 @@ while running:
         )
         penalty_rect = penalty_text_surf.get_rect(center=(W // 2, H // 2 + 100))
         screen.blit(penalty_text_surf, penalty_rect)
-        if pygame.mouse.get_pressed()[0] and player.sprite.dead_timer <= 0:
-            player.sprite.hp = player.sprite.max_hp
-            player.sprite.target_hp = player.sprite.max_hp
-            player.sprite.dead = False
-            zone = "base"
+        if pygame.mouse.get_pressed()[0] and game_state.player_group.sprite.dead_timer <= 0:
+            game_state.player_group.sprite.hp = game_state.player_group.sprite.max_hp
+            game_state.player_group.sprite.target_hp = game_state.player_group.sprite.max_hp
+            game_state.player_group.sprite.dead = False
+            game_state.zone = "base"
     if show_settings:
         settings()
     if pygame.Rect(20, 20, W - 20, H - 20).collidepoint(pygame.mouse.get_pos()):
